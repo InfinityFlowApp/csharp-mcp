@@ -8,10 +8,13 @@
         "-i",
         "--rm",
         "--pull=always",
-        "-v", "${HOME}:${HOME}",
-        "-w", "${PWD}",
+        "-v",
+        "${HOME}:${HOME}",
+        "-w",
+        "${PWD}",
         "ghcr.io/infinityflowapp/csharp-mcp:latest"
       ],
       "env": {}
     }
   }
+}
