@@ -15,7 +15,8 @@ internal class CSharpEvalTools
     [Description("Evaluates and executes C# script code and returns the output. Can either execute code directly or from a file.")]
     public async Task<string> EvalCSharp(
         [Description("Full path to a .csx file to execute")] string? csxFile = null,
-        [Description("C# script code to execute directly")] string? csx = null)
+        [Description("C# script code to execute directly")] string? csx = null,
+        [Description("Maximum execution time in seconds (default: 30)")] int timeoutSeconds = 30)
     {
         if (string.IsNullOrWhiteSpace(csxFile) && string.IsNullOrWhiteSpace(csx))
         {
@@ -33,12 +34,28 @@ internal class CSharpEvalTools
         {
             if (!string.IsNullOrWhiteSpace(csxFile))
             {
-                if (!File.Exists(csxFile))
+                // Validate and normalize the file path to prevent directory traversal
+                try
                 {
-                    return $"Error: File not found: {csxFile}";
+                    var fullPath = Path.GetFullPath(csxFile);
+                    
+                    // Ensure the file has .csx extension
+                    if (!fullPath.EndsWith(".csx", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return $"Error: Only .csx files are allowed. Provided: {csxFile}";
+                    }
+                    
+                    if (!File.Exists(fullPath))
+                    {
+                        return $"Error: File not found: {fullPath}";
+                    }
+                    
+                    scriptCode = await File.ReadAllTextAsync(fullPath);
                 }
-                
-                scriptCode = await File.ReadAllTextAsync(csxFile);
+                catch (Exception ex)
+                {
+                    return $"Error: Invalid file path: {ex.Message}";
+                }
             }
             else
             {
@@ -54,14 +71,20 @@ internal class CSharpEvalTools
                     typeof(System.Text.StringBuilder).Assembly,
                     typeof(System.IO.File).Assembly,
                     typeof(System.Collections.Generic.List<>).Assembly,
-                    typeof(System.Threading.Tasks.Task).Assembly)
+                    typeof(System.Threading.Tasks.Task).Assembly,
+                    typeof(System.Net.Http.HttpClient).Assembly,
+                    typeof(System.Text.Json.JsonSerializer).Assembly,
+                    typeof(System.Text.RegularExpressions.Regex).Assembly)
                 .WithImports(
                     "System",
                     "System.IO",
                     "System.Linq",
                     "System.Text",
                     "System.Collections.Generic",
-                    "System.Threading.Tasks");
+                    "System.Threading.Tasks",
+                    "System.Net.Http",
+                    "System.Text.Json",
+                    "System.Text.RegularExpressions");
 
             // Capture console output
             var originalOut = Console.Out;
@@ -72,8 +95,9 @@ internal class CSharpEvalTools
                 using var stringWriter = new StringWriter(outputBuilder);
                 Console.SetOut(stringWriter);
 
-                // Execute the script
-                var result = await CSharpScript.EvaluateAsync(scriptCode, scriptOptions);
+                // Execute the script with timeout
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+                var result = await CSharpScript.EvaluateAsync(scriptCode, scriptOptions, cancellationToken: cts.Token);
 
                 // Add the result value if it's not null
                 if (result != null)
@@ -96,6 +120,10 @@ internal class CSharpEvalTools
         catch (CompilationErrorException e)
         {
             return $"Compilation Error:\n{string.Join("\n", e.Diagnostics)}";
+        }
+        catch (OperationCanceledException)
+        {
+            return $"Error: Script execution timed out after {timeoutSeconds} seconds.";
         }
         catch (Exception e)
         {
