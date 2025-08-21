@@ -96,8 +96,28 @@ result";
         var result = await _sut.EvalCSharp(csx: code);
 
         // Assert
-        result.Should().StartWith("Compilation Error:");
+        result.Should().StartWith("Compilation Error(s):");
+        result.Should().Contain("Line 1");  // Line number
+        result.Should().Contain("Column");  // Column indicator
         result.Should().Contain("CS1002");  // "; expected" error
+        result.Should().Contain("Code: invalidSyntax here");  // The problematic code
+    }
+    
+    [Test]
+    public async Task EvalCSharp_WithMultilineCompilationError_ShowsCorrectLineNumber()
+    {
+        // Arrange
+        var code = @"var x = 5;
+var y = ;  // Error on line 2
+var z = 10;";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().StartWith("Compilation Error(s):");
+        result.Should().Contain("Line 2");  // Error is on line 2
+        result.Should().Contain("Code: var y = ;");  // Shows the problematic line
     }
 
     [Test]
@@ -110,9 +130,9 @@ result";
         var result = await _sut.EvalCSharp(csx: code);
 
         // Assert
-        result.Should().StartWith("Runtime Error:");
-        result.Should().Contain("InvalidOperationException");
-        result.Should().Contain("Test exception");
+        result.Should().StartWith("Runtime Error: InvalidOperationException");
+        result.Should().Contain("Message: Test exception");
+        result.Should().Contain("Stack Trace:");
     }
 
     [Test]
@@ -194,6 +214,25 @@ result";
 
         // Assert
         result.Should().Be("Error: Script execution timed out after 1 seconds.");
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithRuntimeError_ShowsLineNumber()
+    {
+        // Arrange
+        var code = @"var x = 5;
+var y = 10;
+var z = x / 0;  // Division by zero on line 3
+Console.WriteLine(z);";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().StartWith("Runtime Error:");
+        result.Should().Contain("DivideByZeroException");
+        // The result should contain either "Script Line:" or "Submission#0" in the stack trace
+        result.Should().Match(r => r.Contains("Script Line:") || r.Contains("Submission#0"));
     }
 
     [Test]

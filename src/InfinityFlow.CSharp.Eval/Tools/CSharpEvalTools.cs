@@ -146,7 +146,41 @@ internal class CSharpEvalTools
         }
         catch (CompilationErrorException e)
         {
-            return $"Compilation Error:\n{string.Join("\n", e.Diagnostics)}";
+            var errorBuilder = new StringBuilder();
+            errorBuilder.AppendLine("Compilation Error(s):");
+            errorBuilder.AppendLine();
+            
+            foreach (var diagnostic in e.Diagnostics)
+            {
+                var lineSpan = diagnostic.Location.GetLineSpan();
+                var line = lineSpan.StartLinePosition.Line + 1; // Convert to 1-based
+                var column = lineSpan.StartLinePosition.Character + 1;
+                
+                errorBuilder.AppendLine($"  Line {line}, Column {column}: {diagnostic.Id} - {diagnostic.GetMessage()}");
+                
+                // Try to show the problematic code if available
+                if (!diagnostic.Location.IsInSource) continue;
+                
+                var sourceText = diagnostic.Location.SourceTree?.GetText();
+                if (sourceText != null)
+                {
+                    var lineText = sourceText.Lines[lineSpan.StartLinePosition.Line].ToString();
+                    if (!string.IsNullOrWhiteSpace(lineText))
+                    {
+                        errorBuilder.AppendLine($"    Code: {lineText.Trim()}");
+                        
+                        // Add a pointer to the error position
+                        if (column > 0 && column <= lineText.Length)
+                        {
+                            var pointer = new string(' ', column + 9) + "^"; // 9 for "    Code: "
+                            errorBuilder.AppendLine(pointer);
+                        }
+                    }
+                }
+                errorBuilder.AppendLine();
+            }
+            
+            return errorBuilder.ToString().TrimEnd();
         }
         catch (OperationCanceledException)
         {
@@ -154,7 +188,38 @@ internal class CSharpEvalTools
         }
         catch (Exception e)
         {
-            return $"Runtime Error: {e.GetType().Name}: {e.Message}\n{e.StackTrace}";
+            var errorBuilder = new StringBuilder();
+            errorBuilder.AppendLine($"Runtime Error: {e.GetType().Name}");
+            errorBuilder.AppendLine($"Message: {e.Message}");
+            
+            // Try to extract the line number from the stack trace if it's a script error
+            if (e.StackTrace != null && e.StackTrace.Contains("Submission#0"))
+            {
+                var lines = e.StackTrace.Split('\n');
+                foreach (var traceLine in lines)
+                {
+                    if (traceLine.Contains("Submission#0") && traceLine.Contains(":line"))
+                    {
+                        var lineMatch = System.Text.RegularExpressions.Regex.Match(traceLine, @":line (\d+)");
+                        if (lineMatch.Success)
+                        {
+                            errorBuilder.AppendLine($"Script Line: {lineMatch.Groups[1].Value}");
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (e.InnerException != null)
+            {
+                errorBuilder.AppendLine($"Inner Exception: {e.InnerException.GetType().Name}: {e.InnerException.Message}");
+            }
+            
+            errorBuilder.AppendLine();
+            errorBuilder.AppendLine("Stack Trace:");
+            errorBuilder.AppendLine(e.StackTrace);
+            
+            return errorBuilder.ToString().TrimEnd();
         }
     }
 }
