@@ -48,9 +48,11 @@ internal class CSharpEvalTools
                     }
                     
                     // Optional: Restrict to specific directories for additional security
-                    // This can be configured via environment variable
+                    // Only apply this restriction when NOT running in Docker (Docker has volume mounts)
+                    var isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
                     var allowedPath = Environment.GetEnvironmentVariable("CSX_ALLOWED_PATH");
-                    if (!string.IsNullOrEmpty(allowedPath))
+                    
+                    if (!isDocker && !string.IsNullOrEmpty(allowedPath))
                     {
                         var normalizedAllowedPath = Path.GetFullPath(allowedPath);
                         if (!fullPath.StartsWith(normalizedAllowedPath, StringComparison.OrdinalIgnoreCase))

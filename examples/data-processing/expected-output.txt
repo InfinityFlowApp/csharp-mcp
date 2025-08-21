@@ -18,7 +18,7 @@ Statistics:
 - Most hobbies: Alice (2)
 
 Age Groups:
-- Under 30: 1 people
 - 30 and over: 2 people
+- Under 30: 1 people
 
 Result: Data processing completed. Analyzed 3 people with 6 total hobbies.

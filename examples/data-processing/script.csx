@@ -54,7 +54,8 @@ Console.WriteLine($"- Most hobbies: {statistics.MostHobbies.Name} ({statistics.M
 
 // Group by age range
 var ageGroups = people.GroupBy(p => p.Age < 30 ? "Under 30" : "30 and over")
-                      .Select(g => new { AgeGroup = g.Key, Count = g.Count() });
+                      .Select(g => new { AgeGroup = g.Key, Count = g.Count() })
+                      .OrderBy(g => g.AgeGroup);
 
 Console.WriteLine($"\nAge Groups:");
 foreach (var group in ageGroups)

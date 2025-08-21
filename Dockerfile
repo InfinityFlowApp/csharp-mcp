@@ -47,5 +47,8 @@ USER mcpuser
 # Set NuGet package cache directory
 ENV NUGET_PACKAGES=/tmp/csharp-mcp-packages
 
+# Indicate we're running in a container
+ENV DOTNET_RUNNING_IN_CONTAINER=true
+
 # The MCP server uses stdio for communication
 ENTRYPOINT ["dotnet", "InfinityFlow.CSharp.Eval.dll"]

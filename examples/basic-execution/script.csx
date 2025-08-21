@@ -2,7 +2,7 @@ using System;
 
 // Basic C# script execution example
 Console.WriteLine("Hello from C# MCP!");
-Console.WriteLine($"Current time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+Console.WriteLine($"Script is running...");
 
 // Simple calculation
 var sum = 0;
