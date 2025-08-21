@@ -1,11 +1,8 @@
-#r "nuget: NUnit, 4.4.0"
-#r "nuget: NUnit.Engine, 3.20.1"
+#r "nuget: NUnit, 4.2.2"
 
 using System;
 using System.Reflection;
 using NUnit.Framework;
-using NUnit.Framework.Interfaces;
-using NUnit.Framework.Internal;
 
 Console.WriteLine("=== NUnit Testing Example ===");
 Console.WriteLine();

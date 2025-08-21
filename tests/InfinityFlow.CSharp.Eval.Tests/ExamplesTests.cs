@@ -127,7 +127,53 @@ public class ExamplesTests
     }
 
     [Test]
-    public async Task AllExamples_HaveRequiredFiles()
+    [Category("RequiresNuGet")]
+    public async Task EvalCSharp_WithMultipleNuGetPackages_ExecutesCorrectly()
+    {
+        // Arrange
+        var script = @"
+#r ""nuget: Humanizer, 2.14.1""
+#r ""nuget: Newtonsoft.Json, 13.0.3""
+
+using Humanizer;
+using Newtonsoft.Json;
+
+var data = new { 
+    Message = ""Hello World"",
+    Count = 5,
+    Timestamp = DateTime.Now
+};
+
+var json = JsonConvert.SerializeObject(data, Formatting.Indented);
+Console.WriteLine(""Serialized JSON:"");
+Console.WriteLine(json);
+
+Console.WriteLine($""\n'{data.Count} items' humanized: {data.Count.ToWords()} items"");
+Console.WriteLine($""'2 hours' humanized: {""{0:hh\\:mm\\:ss}"".FormatWith(TimeSpan.FromHours(2))}"");
+
+""Multiple NuGet packages loaded successfully!""
+";
+
+        // Act
+        var result = await _evalTools.EvalCSharp(csx: script);
+
+        // Assert
+        if (result.Contains("Failed to resolve NuGet package"))
+        {
+            Assert.Ignore("NuGet package resolution not available in this environment");
+            return;
+        }
+
+        result.Should().NotContain("Error:", "Script should execute without errors");
+        result.Should().Contain("Serialized JSON:");
+        result.Should().Contain("Hello World");
+        result.Should().Contain("'5 items' humanized: five items");
+        result.Should().Contain("'2 hours' humanized: 02:00:00");
+        result.Should().Contain("Result: Multiple NuGet packages loaded successfully!");
+    }
+
+    [Test]
+    public void AllExamples_HaveRequiredFiles()
     {
         // Arrange
         var examplesRoot = Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "examples");
