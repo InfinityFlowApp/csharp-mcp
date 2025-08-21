@@ -1,0 +1,1 @@
+- Never skip tests. Always fix them.
