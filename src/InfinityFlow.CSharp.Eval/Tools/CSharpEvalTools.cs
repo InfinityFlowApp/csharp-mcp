@@ -1,5 +1,7 @@
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Text;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using ModelContextProtocol.Server;
@@ -14,7 +16,7 @@ namespace InfinityFlow.CSharp.Eval.Tools;
 public class CSharpEvalTools
 {
     [McpServerTool]
-    [Description("Evaluates and executes C# script code and returns the output. Can either execute code directly or from a file.")]
+    [Description("Evaluates and executes C# script code and returns the output. Can either execute code directly or from a file. Supports NuGet package references using #r \"nuget: PackageName, Version\" directives.")]
     public async Task<string> EvalCSharp(
         [Description("Full path to a .csx file to execute")] string? csxFile = null,
         [Description("C# script code to execute directly")] string? csx = null,
@@ -48,9 +50,11 @@ public class CSharpEvalTools
                     }
 
                     // Optional: Restrict to specific directories for additional security
-                    // This can be configured via environment variable
+                    // Only apply this restriction when NOT running in Docker (Docker has volume mounts)
+                    var isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
                     var allowedPath = Environment.GetEnvironmentVariable("CSX_ALLOWED_PATH");
-                    if (!string.IsNullOrEmpty(allowedPath))
+
+                    if (!isDocker && !string.IsNullOrEmpty(allowedPath))
                     {
                         var normalizedAllowedPath = Path.GetFullPath(allowedPath);
                         if (!fullPath.StartsWith(normalizedAllowedPath, StringComparison.OrdinalIgnoreCase))
@@ -76,6 +80,29 @@ public class CSharpEvalTools
                 scriptCode = csx!;
             }
 
+            // Resolve NuGet packages if any and remove #r directives from script
+            var (nugetReferences, errors) = await NuGetPackageResolver.ResolvePackagesAsync(scriptCode);
+
+            // If there were errors resolving packages, return them
+            if (errors.Count > 0)
+            {
+                var errorBuilder = new StringBuilder();
+                errorBuilder.AppendLine("NuGet Package Resolution Error(s):");
+                errorBuilder.AppendLine();
+                foreach (var error in errors)
+                {
+                    errorBuilder.AppendLine($"  {error}");
+                }
+                return errorBuilder.ToString().TrimEnd();
+            }
+
+            // Remove #r directives from the script since we're handling them separately
+            var cleanedScript = System.Text.RegularExpressions.Regex.Replace(
+                scriptCode,
+                @"^\s*#r\s+""nuget:[^""]*"".*$",
+                "",
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+
             // Create script options with common assemblies and imports
             var scriptOptions = ScriptOptions.Default
                 .WithReferences(
@@ -89,6 +116,7 @@ public class CSharpEvalTools
                     typeof(System.Net.Http.HttpClient).Assembly,
                     typeof(System.Text.Json.JsonSerializer).Assembly,
                     typeof(System.Text.RegularExpressions.Regex).Assembly)
+                .AddReferences(nugetReferences)
                 .WithImports(
                     "System",
                     "System.IO",
@@ -98,7 +126,10 @@ public class CSharpEvalTools
                     "System.Threading.Tasks",
                     "System.Net.Http",
                     "System.Text.Json",
-                    "System.Text.RegularExpressions");
+                    "System.Text.RegularExpressions")
+                .WithSourceResolver(new SourceFileResolver(ImmutableArray<string>.Empty, baseDirectory: Environment.CurrentDirectory))
+                .WithMetadataResolver(ScriptMetadataResolver.Default.WithSearchPaths(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory()))
+                .WithEmitDebugInformation(true);
 
             // Capture console output
             var originalOut = Console.Out;
@@ -114,7 +145,7 @@ public class CSharpEvalTools
 
                 // Run script in a task so we can properly handle timeout
                 var scriptTask = Task.Run(async () =>
-                    await CSharpScript.EvaluateAsync(scriptCode, scriptOptions, cancellationToken: cts.Token),
+                    await CSharpScript.EvaluateAsync(cleanedScript, scriptOptions, cancellationToken: cts.Token),
                     cts.Token);
 
                 var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds));

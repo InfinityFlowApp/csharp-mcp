@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <RollForward>Major</RollForward>
@@ -35,10 +34,11 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="NuGet.Protocol" />
+    <PackageReference Include="NuGet.Resolver" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="InfinityFlow.CSharp.Eval.Tests" />
   </ItemGroup>
-
 </Project>

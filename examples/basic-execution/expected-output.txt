@@ -1,0 +1,5 @@
+Hello from C# MCP!
+Script is running...
+Sum of 1 to 10: 55
+
+Result: Script completed successfully with sum = 55

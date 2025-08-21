@@ -6,9 +6,10 @@ An MCP (Model Context Protocol) server that evaluates and executes C# scripts us
 
 - 🚀 Execute C# scripts directly or from files
 - 📦 Full Roslyn scripting support with common namespaces pre-imported
+- 📚 NuGet package support via `#r "nuget: PackageName, Version"` directives
 - 🔒 Console output capture (safe for MCP stdio protocol)
 - ⚡ Comprehensive error handling for compilation and runtime errors
-- 🐳 Available as both Docker container and dotnet tool
+- 🐳 Available as both Docker container and dotnet tool with volume mounting support
 - ✅ Full test coverage with NUnit and FluentAssertions
 
 ## Installation
@@ -56,12 +57,21 @@ The MCP server exposes a single tool: `EvalCSharp`
 
 - `csxFile` (optional): Full path to a .csx file to execute
 - `csx` (optional): C# script code to execute directly
+- `timeoutSeconds` (optional): Maximum execution time in seconds (default: 30)
 
 Either `csxFile` or `csx` must be provided, but not both.
 
 ### Examples
 
+For comprehensive examples, see the [examples directory](examples/):
+- [Basic Execution](examples/basic-execution/) - Simple C# script execution
+- [Fibonacci Sequence](examples/fibonacci-sequence/) - Generating number sequences
+- [Data Processing](examples/data-processing/) - LINQ and data manipulation
+- [NuGet Packages](examples/nuget-packages/) - Using external NuGet packages
+- [NUnit Testing](examples/nunit-testing/) - Running tests programmatically
+
 #### Direct code execution
+
 ```json
 {
   "tool": "EvalCSharp",
@@ -72,12 +82,14 @@ Either `csxFile` or `csx` must be provided, but not both.
 ```
 
 Output:
-```
+
+```text
 Hello World!
 Result: 4
 ```
 
 #### Execute from file
+
 ```json
 {
   "tool": "EvalCSharp",
@@ -88,6 +100,7 @@ Result: 4
 ```
 
 #### Complex example with LINQ
+
 ```csharp
 var numbers = Enumerable.Range(1, 10);
 var evenSum = numbers.Where(n => n % 2 == 0).Sum();
@@ -96,7 +109,8 @@ evenSum * 2
 ```
 
 Output:
-```
+
+```text
 Sum of even numbers: 30
 Result: 60
 ```
@@ -104,12 +118,38 @@ Result: 60
 ### Pre-imported namespaces
 
 The following namespaces are automatically available:
+
 - `System`
 - `System.IO`
 - `System.Linq`
 - `System.Text`
 - `System.Collections.Generic`
 - `System.Threading.Tasks`
+- `System.Net.Http`
+- `System.Text.Json`
+- `System.Text.RegularExpressions`
+
+### NuGet Package Support
+
+You can reference NuGet packages directly in your scripts using the `#r` directive:
+
+```csharp
+#r "nuget: Newtonsoft.Json, 13.0.3"
+#r "nuget: Humanizer, 2.14.1"
+
+using Newtonsoft.Json;
+using Humanizer;
+
+var json = JsonConvert.SerializeObject(new { Message = "Hello World" });
+Console.WriteLine(json);
+Console.WriteLine("5 days".Humanize());
+```
+
+The tool will automatically:
+- Download the specified packages from NuGet.org
+- Resolve and download dependencies
+- Cache packages for faster subsequent runs
+- Provide detailed error messages for invalid package specifications
 
 ## MCP Configuration
 
@@ -159,14 +199,18 @@ Add to your Claude Code configuration (`claude_desktop_config.json`):
   "mcpServers": {
     "csharp-eval": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/infinityflowapp/csharp-mcp:latest"],
-      "env": {
-        "CSX_ALLOWED_PATH": "/scripts"
-      }
+      "args": [
+        "run", "-i", "--rm", "--pull=always",
+        "-v", "${HOME}:${HOME}",
+        "-w", "${PWD}",
+        "ghcr.io/infinityflowapp/csharp-mcp:latest"
+      ]
     }
   }
 }
 ```
+
+Note: The volume mounting (`-v ${HOME}:${HOME}`) allows the tool to access .csx files from your filesystem.
 
 Or if installed as a dotnet tool:
 
@@ -262,18 +306,26 @@ docker run -it infinityflow/csharp-eval-mcp
 
 ## Project Structure
 
-```
+```text
 csharp-mcp/
 ├── src/
 │   └── InfinityFlow.CSharp.Eval/     # Main MCP server implementation
 │       ├── Tools/
-│       │   └── CSharpEvalTools.cs    # Roslyn script evaluation tool
+│       │   ├── CSharpEvalTools.cs    # Roslyn script evaluation tool
+│       │   └── NuGetPackageResolver.cs # NuGet package resolution
 │       ├── Program.cs                # MCP server entry point
 │       └── .mcp/
 │           └── server.json           # MCP server configuration
 ├── tests/
 │   └── InfinityFlow.CSharp.Eval.Tests/  # Unit tests
-│       └── CSharpEvalToolsTests.cs      # Comprehensive test suite
+│       ├── CSharpEvalToolsTests.cs      # Core functionality tests
+│       └── ExamplesTests.cs             # Example validation tests
+├── examples/                         # Example scripts with documentation
+│   ├── basic-execution/             # Simple C# script examples
+│   ├── fibonacci-sequence/          # Algorithm demonstrations
+│   ├── data-processing/             # LINQ and data manipulation
+│   ├── nuget-packages/              # External package usage
+│   └── nunit-testing/               # Programmatic test execution
 ├── Directory.Packages.props          # Central package management
 ├── Dockerfile                        # Docker containerization
 ├── docker-compose.yml               # Docker compose configuration
@@ -303,6 +355,7 @@ git push origin v1.0.0
 ```
 
 This will:
+
 1. Build and test the project
 2. Publish Docker image to GitHub Container Registry
 3. Publish NuGet package to NuGet.org
