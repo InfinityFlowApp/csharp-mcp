@@ -371,6 +371,24 @@ This will:
 - 🔒 Only .csx files are allowed for execution
 - ⏱️ Scripts have a configurable timeout (default 30 seconds)
 
+### File Access Restrictions
+
+The `CSX_ALLOWED_PATH` environment variable restricts which directories can be accessed when executing .csx files:
+
+```bash
+# Restrict to specific directory
+export CSX_ALLOWED_PATH=/path/to/allowed/scripts
+
+# Multiple paths (colon-separated on Linux/Mac, semicolon on Windows)
+export CSX_ALLOWED_PATH=/path/one:/path/two:/path/three
+```
+
+**Important Notes:**
+- Path restrictions are **disabled inside Docker containers** (when `DOTNET_RUNNING_IN_CONTAINER=true`)
+- This is because Docker already provides isolation via volume mounts
+- If not set, file access is unrestricted (use with caution)
+- Paths are checked recursively - subdirectories are allowed
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

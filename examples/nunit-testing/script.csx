@@ -1,13 +1,15 @@
-#r "nuget: NUnit, 4.4.0"
-#r "nuget: NUnit.Engine, 3.20.1"
+#r "nuget: NUnit, 4.2.2"
+#r "nuget: NUnit.Engine, 3.18.3"
+#r "nuget: System.Xml.XDocument, 4.3.0"
 
 using System;
 using System.Reflection;
+using System.Linq;
+using System.Xml.Linq;
 using NUnit.Framework;
-using NUnit.Framework.Interfaces;
-using NUnit.Framework.Internal;
+using NUnit.Engine;
 
-Console.WriteLine("=== NUnit Testing Example ===");
+Console.WriteLine("=== NUnit Testing Example with Engine ===");
 Console.WriteLine();
 
 // Define test classes
@@ -113,88 +115,169 @@ public static class StringUtils
     }
 }
 
-// Run the tests programmatically
-Console.WriteLine("Running Calculator Tests:");
-Console.WriteLine("-------------------------");
-RunTestsForType(typeof(CalculatorTests));
-
+// Run tests using NUnit Engine
+Console.WriteLine("Running tests with NUnit Engine...");
 Console.WriteLine();
-Console.WriteLine("Running String Utils Tests:");
-Console.WriteLine("---------------------------");
-RunTestsForType(typeof(StringUtilsTests));
 
-Console.WriteLine();
-Console.WriteLine("=== Test Summary ===");
-var totalPassed = 0;
-var totalFailed = 0;
-
-// Count results from both test fixtures
-foreach (var type in new[] { typeof(CalculatorTests), typeof(StringUtilsTests) })
+try
 {
-    foreach (var method in type.GetMethods())
+    using (var engine = TestEngineActivator.CreateInstance())
     {
-        if (method.GetCustomAttribute<TestAttribute>() != null)
+        // Create a test package for the current assembly
+        var package = new TestPackage(Assembly.GetExecutingAssembly().Location);
+        
+        using (var runner = engine.GetRunner(package))
         {
-            try
+            // Run the tests
+            var xmlResult = runner.Run(null, TestFilter.Empty);
+            
+            // Parse XML results
+            var xmlText = xmlResult.OuterXml;
+            var doc = XDocument.Parse(xmlText);
+            
+            var testRun = doc.Descendants("test-run").FirstOrDefault();
+            if (testRun != null)
             {
-                var instance = Activator.CreateInstance(type);
-                var setup = type.GetMethod("Setup");
-                setup?.Invoke(instance, null);
-                method.Invoke(instance, null);
-                totalPassed++;
-            }
-            catch
-            {
-                totalFailed++;
-            }
-        }
-    }
-}
-
-Console.WriteLine($"Total Passed: {totalPassed}");
-Console.WriteLine($"Total Failed: {totalFailed}");
-Console.WriteLine($"Success Rate: {(totalPassed * 100.0 / (totalPassed + totalFailed)):F1}%");
-
-void RunTestsForType(Type testType)
-{
-    var instance = Activator.CreateInstance(testType);
-    
-    foreach (var method in testType.GetMethods())
-    {
-        var testAttr = method.GetCustomAttribute<TestAttribute>();
-        if (testAttr != null)
-        {
-            try
-            {
-                // Run setup if exists
-                var setup = testType.GetMethod("Setup");
-                setup?.Invoke(instance, null);
+                var testCount = int.Parse(testRun.Attribute("testcasecount")?.Value ?? "0");
+                var passCount = int.Parse(testRun.Attribute("passed")?.Value ?? "0");
+                var failCount = int.Parse(testRun.Attribute("failed")?.Value ?? "0");
+                var skipCount = int.Parse(testRun.Attribute("skipped")?.Value ?? "0");
                 
-                // Run test
-                method.Invoke(instance, null);
-                Console.WriteLine($"  ✓ {method.Name}");
+                // Display individual test results
+                Console.WriteLine("Test Results:");
+                Console.WriteLine("-------------");
+                
+                var testCases = doc.Descendants("test-case");
+                foreach (var testCase in testCases)
+                {
+                    var name = testCase.Attribute("name")?.Value ?? "Unknown";
+                    var outcome = testCase.Attribute("result")?.Value ?? "Unknown";
+                    var symbol = outcome == "Passed" ? "✓" : outcome == "Failed" ? "✗" : "○";
+                    var shortName = name.Split('.').Last();
+                    Console.WriteLine($"  {symbol} {shortName}");
+                }
+                
+                Console.WriteLine();
+                Console.WriteLine("=== Test Summary ===");
+                Console.WriteLine($"Total Tests: {testCount}");
+                Console.WriteLine($"Passed: {passCount}");
+                Console.WriteLine($"Failed: {failCount}");
+                Console.WriteLine($"Skipped: {skipCount}");
+                Console.WriteLine($"Success Rate: {(testCount > 0 ? (passCount * 100.0 / testCount) : 0):F1}%");
             }
-            catch (Exception ex)
+            else
             {
-                var innerEx = ex.InnerException ?? ex;
-                // Check for expected exceptions (like our Divide_ByZero_ThrowsException test)
-                if (method.Name.Contains("ThrowsException") && innerEx is SuccessException)
-                {
-                    Console.WriteLine($"  ✓ {method.Name}");
-                }
-                else if (innerEx.GetType().Name == "AssertionException")
-                {
-                    Console.WriteLine($"  ✗ {method.Name}: Assertion failed");
-                }
-                else if (innerEx.GetType().Name == "SuccessException")
-                {
-                    Console.WriteLine($"  ✓ {method.Name}");
-                }
-                else
-                {
-                    Console.WriteLine($"  ✓ {method.Name}");
-                }
+                Console.WriteLine("No test results found in XML output.");
             }
         }
     }
 }
+catch (Exception ex)
+{
+    Console.WriteLine($"Error running tests with NUnit Engine: {ex.Message}");
+    Console.WriteLine();
+    Console.WriteLine("Falling back to manual test execution...");
+    Console.WriteLine();
+    
+    // Fallback: Run tests manually
+    var passed = 0;
+    var failed = 0;
+    
+    Console.WriteLine("Running Calculator Tests:");
+    Console.WriteLine("-------------------------");
+    
+    var calc = new Calculator();
+    
+    // Test Add
+    try { 
+        Assert.That(calc.Add(2, 3), Is.EqualTo(5)); 
+        Console.WriteLine("  ✓ Add_TwoNumbers_ReturnsSum");
+        passed++;
+    } catch { 
+        Console.WriteLine("  ✗ Add_TwoNumbers_ReturnsSum");
+        failed++;
+    }
+    
+    // Test Subtract
+    try { 
+        Assert.That(calc.Subtract(10, 4), Is.EqualTo(6)); 
+        Console.WriteLine("  ✓ Subtract_TwoNumbers_ReturnsDifference");
+        passed++;
+    } catch { 
+        Console.WriteLine("  ✗ Subtract_TwoNumbers_ReturnsDifference");
+        failed++;
+    }
+    
+    // Test Multiply
+    try { 
+        Assert.That(calc.Multiply(3, 4), Is.EqualTo(12)); 
+        Console.WriteLine("  ✓ Multiply_TwoNumbers_ReturnsProduct");
+        passed++;
+    } catch { 
+        Console.WriteLine("  ✗ Multiply_TwoNumbers_ReturnsProduct");
+        failed++;
+    }
+    
+    // Test Divide by Zero
+    try { 
+        Assert.Throws<DivideByZeroException>(() => calc.Divide(10, 0)); 
+        Console.WriteLine("  ✓ Divide_ByZero_ThrowsException");
+        passed++;
+    } catch { 
+        Console.WriteLine("  ✗ Divide_ByZero_ThrowsException");
+        failed++;
+    }
+    
+    // Test Divide
+    try { 
+        Assert.That(calc.Divide(10, 2), Is.EqualTo(5)); 
+        Console.WriteLine("  ✓ Divide_TwoNumbers_ReturnsQuotient");
+        passed++;
+    } catch { 
+        Console.WriteLine("  ✗ Divide_TwoNumbers_ReturnsQuotient");
+        failed++;
+    }
+    
+    Console.WriteLine();
+    Console.WriteLine("Running String Utils Tests:");
+    Console.WriteLine("---------------------------");
+    
+    // Test Reverse
+    try { 
+        Assert.That(StringUtils.Reverse("hello"), Is.EqualTo("olleh")); 
+        Console.WriteLine("  ✓ Reverse_SimpleString_ReturnsReversed");
+        passed++;
+    } catch { 
+        Console.WriteLine("  ✗ Reverse_SimpleString_ReturnsReversed");
+        failed++;
+    }
+    
+    // Test IsPalindrome true
+    try { 
+        Assert.That(StringUtils.IsPalindrome("racecar"), Is.True); 
+        Console.WriteLine("  ✓ IsPalindrome_WithPalindrome_ReturnsTrue");
+        passed++;
+    } catch { 
+        Console.WriteLine("  ✗ IsPalindrome_WithPalindrome_ReturnsTrue");
+        failed++;
+    }
+    
+    // Test IsPalindrome false
+    try { 
+        Assert.That(StringUtils.IsPalindrome("hello"), Is.False); 
+        Console.WriteLine("  ✓ IsPalindrome_WithNonPalindrome_ReturnsFalse");
+        passed++;
+    } catch { 
+        Console.WriteLine("  ✗ IsPalindrome_WithNonPalindrome_ReturnsFalse");
+        failed++;
+    }
+    
+    Console.WriteLine();
+    Console.WriteLine("=== Test Summary ===");
+    Console.WriteLine($"Total Tests: {passed + failed}");
+    Console.WriteLine($"Passed: {passed}");
+    Console.WriteLine($"Failed: {failed}");
+    Console.WriteLine($"Success Rate: {(passed * 100.0 / (passed + failed)):F1}%");
+}
+
+"NUnit Engine test execution completed!"
