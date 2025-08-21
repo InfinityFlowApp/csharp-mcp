@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  csharp-eval-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: infinityflow/csharp-eval-mcp:latest
+    container_name: csharp-eval-mcp
+    stdin_open: true
+    tty: true
+    environment:
+      - DOTNET_ENVIRONMENT=Production
+    volumes:
+      # Mount scripts directory for executing .csx files
+      - ./scripts:/scripts:ro
+    # The service uses stdio for MCP communication
+    # Use docker run -it or docker-compose run for interactive mode
+    command: []

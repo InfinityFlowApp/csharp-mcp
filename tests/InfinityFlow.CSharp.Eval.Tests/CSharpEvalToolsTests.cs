@@ -1,0 +1,201 @@
+using FluentAssertions;
+using InfinityFlow.CSharp.Eval.Tools;
+
+namespace InfinityFlow.CSharp.Eval.Tests;
+
+public class CSharpEvalToolsTests
+{
+    private CSharpEvalTools _sut;
+    private string _testFilePath;
+
+    [SetUp]
+    public void Setup()
+    {
+        _sut = new CSharpEvalTools();
+        _testFilePath = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.csx");
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        if (File.Exists(_testFilePath))
+        {
+            File.Delete(_testFilePath);
+        }
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithSimpleExpression_ReturnsResult()
+    {
+        // Arrange
+        var code = "2 + 2";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().Contain("Result: 4");
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithConsoleOutput_CapturesOutput()
+    {
+        // Arrange
+        var code = "Console.WriteLine(\"Hello World\");";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().Contain("Hello World");
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithLinqExpression_ExecutesCorrectly()
+    {
+        // Arrange
+        var code = @"
+var numbers = new[] { 1, 2, 3, 4, 5 };
+var sum = numbers.Sum();
+Console.WriteLine($""Sum: {sum}"");
+sum";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().Contain("Sum: 15");
+        result.Should().Contain("Result: 15");
+    }
+
+    [Test]
+    public async Task EvalCSharp_FromFile_ExecutesCorrectly()
+    {
+        // Arrange
+        var code = @"
+Console.WriteLine(""Executing from file"");
+var result = Math.Pow(2, 3);
+result";
+        await File.WriteAllTextAsync(_testFilePath, code);
+
+        // Act
+        var result = await _sut.EvalCSharp(csxFile: _testFilePath);
+
+        // Assert
+        result.Should().Contain("Executing from file");
+        result.Should().Contain("Result: 8");
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithCompilationError_ReturnsErrorMessage()
+    {
+        // Arrange
+        var code = "invalidSyntax here";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().StartWith("Compilation Error:");
+        result.Should().Contain("CS1002");  // "; expected" error
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithRuntimeError_ReturnsErrorMessage()
+    {
+        // Arrange
+        var code = "throw new InvalidOperationException(\"Test exception\");";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().StartWith("Runtime Error:");
+        result.Should().Contain("InvalidOperationException");
+        result.Should().Contain("Test exception");
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithNoParameters_ReturnsError()
+    {
+        // Act
+        var result = await _sut.EvalCSharp();
+
+        // Assert
+        result.Should().Be("Error: Either csxFile or csx parameter must be provided.");
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithBothParameters_ReturnsError()
+    {
+        // Act
+        var result = await _sut.EvalCSharp(csxFile: "file.csx", csx: "code");
+
+        // Assert
+        result.Should().Be("Error: Only one of csxFile or csx parameter should be provided, not both.");
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithNonExistentFile_ReturnsError()
+    {
+        // Arrange
+        var nonExistentFile = Path.Combine(Path.GetTempPath(), "nonexistent.csx");
+
+        // Act
+        var result = await _sut.EvalCSharp(csxFile: nonExistentFile);
+
+        // Assert
+        result.Should().StartWith("Error: File not found:");
+        result.Should().Contain(nonExistentFile);
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithAsyncCode_ExecutesCorrectly()
+    {
+        // Arrange
+        var code = @"
+await Task.Delay(10);
+Console.WriteLine(""Async execution completed"");
+42";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().Contain("Async execution completed");
+        result.Should().Contain("Result: 42");
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithNoOutput_ReturnsSuccessMessage()
+    {
+        // Arrange
+        var code = "var x = 5;";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().Be("Script executed successfully with no output.");
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithComplexTypes_HandlesCorrectly()
+    {
+        // Arrange
+        var code = @"
+var dict = new Dictionary<string, int> { [""a""] = 1, [""b""] = 2 };
+var list = new List<string> { ""hello"", ""world"" };
+Console.WriteLine($""Dictionary count: {dict.Count}"");
+Console.WriteLine($""List items: {string.Join("", "", list)}"");
+""Completed""";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().Contain("Dictionary count: 2");
+        result.Should().Contain("List items: hello, world");
+        result.Should().Contain("Result: Completed");
+    }
+}
