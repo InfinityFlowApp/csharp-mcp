@@ -1,5 +1,7 @@
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Text;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using ModelContextProtocol.Server;
@@ -74,6 +76,9 @@ internal class CSharpEvalTools
                 scriptCode = csx!;
             }
 
+            // Resolve NuGet packages if any
+            var nugetReferences = await NuGetPackageResolver.ResolvePackagesAsync(scriptCode);
+            
             // Create script options with common assemblies and imports
             var scriptOptions = ScriptOptions.Default
                 .WithReferences(
@@ -87,6 +92,7 @@ internal class CSharpEvalTools
                     typeof(System.Net.Http.HttpClient).Assembly,
                     typeof(System.Text.Json.JsonSerializer).Assembly,
                     typeof(System.Text.RegularExpressions.Regex).Assembly)
+                .AddReferences(nugetReferences)
                 .WithImports(
                     "System",
                     "System.IO",
@@ -96,7 +102,10 @@ internal class CSharpEvalTools
                     "System.Threading.Tasks",
                     "System.Net.Http",
                     "System.Text.Json",
-                    "System.Text.RegularExpressions");
+                    "System.Text.RegularExpressions")
+                .WithSourceResolver(new SourceFileResolver(ImmutableArray<string>.Empty, baseDirectory: Environment.CurrentDirectory))
+                .WithMetadataResolver(ScriptMetadataResolver.Default.WithSearchPaths(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory()))
+                .WithEmitDebugInformation(true);
 
             // Capture console output
             var originalOut = Console.Out;

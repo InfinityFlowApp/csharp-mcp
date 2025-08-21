@@ -62,6 +62,7 @@ Either `csxFile` or `csx` must be provided, but not both.
 ### Examples
 
 #### Direct code execution
+
 ```json
 {
   "tool": "EvalCSharp",
@@ -72,12 +73,14 @@ Either `csxFile` or `csx` must be provided, but not both.
 ```
 
 Output:
-```
+
+```text
 Hello World!
 Result: 4
 ```
 
 #### Execute from file
+
 ```json
 {
   "tool": "EvalCSharp",
@@ -88,6 +91,7 @@ Result: 4
 ```
 
 #### Complex example with LINQ
+
 ```csharp
 var numbers = Enumerable.Range(1, 10);
 var evenSum = numbers.Where(n => n % 2 == 0).Sum();
@@ -96,7 +100,8 @@ evenSum * 2
 ```
 
 Output:
-```
+
+```text
 Sum of even numbers: 30
 Result: 60
 ```
@@ -104,6 +109,7 @@ Result: 60
 ### Pre-imported namespaces
 
 The following namespaces are automatically available:
+
 - `System`
 - `System.IO`
 - `System.Linq`
@@ -262,7 +268,7 @@ docker run -it infinityflow/csharp-eval-mcp
 
 ## Project Structure
 
-```
+```text
 csharp-mcp/
 ├── src/
 │   └── InfinityFlow.CSharp.Eval/     # Main MCP server implementation
@@ -303,6 +309,7 @@ git push origin v1.0.0
 ```
 
 This will:
+
 1. Build and test the project
 2. Publish Docker image to GitHub Container Registry
 3. Publish NuGet package to NuGet.org
