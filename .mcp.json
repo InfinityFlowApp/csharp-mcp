@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "csharp-mcp": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "ghcr.io/infinityflowapp/csharp-mcp:latest"
+      ],
+      "env": {}
+    }
+  }
+}
