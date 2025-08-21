@@ -1,0 +1,24 @@
+=== NuGet Package Example ===
+Using Newtonsoft.Json for JSON operations
+
+Formatted JSON:
+{
+  "name": "John Doe",
+  "age": 30,
+  "skills": [
+    "C#",
+    "ASP.NET",
+    "Azure"
+  ],
+  "active": true
+}
+
+Number of skills: 3
+
+Person object created:
+- Name: John Doe
+- Age: 30
+- Active: True
+- Skills: C#, ASP.NET, Azure
+
+Result: Successfully processed JSON with 3 skills

@@ -1,0 +1,24 @@
+=== Data Processing Example ===
+Processing 3 records...
+
+People in database:
+- Alice (30 years old)
+  Hobbies: Reading, Gaming
+- Bob (25 years old)
+  Hobbies: Sports, Music
+- Charlie (35 years old)
+  Hobbies: Cooking, Travel
+
+Statistics:
+- Total people: 3
+- Average age: 30.0
+- Youngest: Bob (25 years old)
+- Oldest: Charlie (35 years old)
+- Total hobbies: 6
+- Most hobbies: Alice (2)
+
+Age Groups:
+- Under 30: 1 people
+- 30 and over: 2 people
+
+Result: Data processing completed. Analyzed 3 people with 6 total hobbies.
