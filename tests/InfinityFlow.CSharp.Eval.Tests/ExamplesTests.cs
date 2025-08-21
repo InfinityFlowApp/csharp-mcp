@@ -15,10 +15,25 @@ public class ExamplesTests
         _evalTools = new CSharpEvalTools();
     }
     
+    public static IEnumerable<TestCaseData> GetExampleDirectories()
+    {
+        var examplesRoot = Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "examples");
+        if (Directory.Exists(examplesRoot))
+        {
+            foreach (var dir in Directory.GetDirectories(examplesRoot))
+            {
+                var dirName = Path.GetFileName(dir);
+                // Skip nuget-packages as it's tested separately with RequiresNuGet category
+                if (dirName != "nuget-packages")
+                {
+                    yield return new TestCaseData(dirName).SetName($"Example_{dirName}");
+                }
+            }
+        }
+    }
+    
     [Test]
-    [TestCase("basic-execution")]
-    [TestCase("fibonacci-sequence")]
-    [TestCase("data-processing")]
+    [TestCaseSource(nameof(GetExampleDirectories))]
     public async Task Example_ExecutesCorrectly_And_MatchesExpectedOutput(string exampleName)
     {
         // Arrange
