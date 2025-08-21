@@ -113,6 +113,76 @@ The following namespaces are automatically available:
 
 ## MCP Configuration
 
+### Cursor
+
+Add to your Cursor settings (`.cursor/mcp_settings.json` or via Settings UI):
+
+```json
+{
+  "mcpServers": {
+    "csharp-eval": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "ghcr.io/infinityflowapp/csharp-mcp:latest"],
+      "env": {
+        "CSX_ALLOWED_PATH": "/scripts"
+      }
+    }
+  }
+}
+```
+
+Or if installed as a dotnet tool:
+
+```json
+{
+  "mcpServers": {
+    "csharp-eval": {
+      "command": "infinityflow-csharp-eval",
+      "env": {
+        "CSX_ALLOWED_PATH": "${workspaceFolder}/scripts"
+      }
+    }
+  }
+}
+```
+
+### Claude Code
+
+Add to your Claude Code configuration (`claude_desktop_config.json`):
+
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux**: `~/.config/claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "csharp-eval": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "ghcr.io/infinityflowapp/csharp-mcp:latest"],
+      "env": {
+        "CSX_ALLOWED_PATH": "/scripts"
+      }
+    }
+  }
+}
+```
+
+Or if installed as a dotnet tool:
+
+```json
+{
+  "mcpServers": {
+    "csharp-eval": {
+      "command": "infinityflow-csharp-eval",
+      "env": {
+        "CSX_ALLOWED_PATH": "/Users/your-username/scripts"
+      }
+    }
+  }
+}
+```
+
 ### VS Code
 
 Create `.vscode/mcp.json`:
