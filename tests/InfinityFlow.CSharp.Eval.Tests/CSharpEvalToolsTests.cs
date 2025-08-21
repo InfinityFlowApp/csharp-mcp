@@ -102,7 +102,7 @@ result";
         result.Should().Contain("CS1002");  // "; expected" error
         result.Should().Contain("Code: invalidSyntax here");  // The problematic code
     }
-    
+
     [Test]
     public async Task EvalCSharp_WithMultilineCompilationError_ShowsCorrectLineNumber()
     {
@@ -167,7 +167,7 @@ var z = 10;";
         // Assert
         result.Should().StartWith("Error: File not found:");
     }
-    
+
     [Test]
     public async Task EvalCSharp_WithNonCsxFile_ReturnsError()
     {

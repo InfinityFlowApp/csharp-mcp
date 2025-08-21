@@ -20,7 +20,7 @@ internal class NuGetPackageResolver
     private static readonly string PackagesDirectory = Path.Combine(Path.GetTempPath(), "csharp-mcp-packages");
     private static readonly Regex NuGetDirectiveRegex = new(@"#r\s+""nuget:\s*([^,]+),\s*([^""]+)""", RegexOptions.Compiled);
     private static readonly Regex AnyNuGetDirectiveRegex = new(@"#r\s+""nuget:[^""]*""", RegexOptions.Compiled);
-    
+
     static NuGetPackageResolver()
     {
         Directory.CreateDirectory(PackagesDirectory);
@@ -30,13 +30,13 @@ internal class NuGetPackageResolver
     {
         var references = new List<MetadataReference>();
         var errors = new List<string>();
-        
+
         // First, find all #r "nuget:..." directives
         var allNuGetDirectives = AnyNuGetDirectiveRegex.Matches(scriptCode);
-        
+
         // Then find properly formatted ones
         var validMatches = NuGetDirectiveRegex.Matches(scriptCode);
-        
+
         // Check for malformed directives
         foreach (Match directive in allNuGetDirectives)
         {
@@ -49,13 +49,13 @@ internal class NuGetPackageResolver
                     break;
                 }
             }
-            
+
             if (!isValid)
             {
                 errors.Add($"Invalid NuGet directive syntax: {directive.Value}. Expected format: #r \"nuget: PackageName, Version\"");
             }
         }
-        
+
         if (validMatches.Count == 0 && errors.Count == 0)
             return (references, errors);
 
@@ -65,12 +65,12 @@ internal class NuGetPackageResolver
             var cache = new SourceCacheContext();
             var settings = Settings.LoadDefaultSettings(null);
             var repository = Repository.Factory.GetCoreV3("https://api.nuget.org/v3/index.json");
-            
+
             foreach (Match match in validMatches)
             {
                 var packageId = match.Groups[1].Value.Trim();
                 var version = match.Groups[2].Value.Trim();
-                
+
                 try
                 {
                     var assemblies = await DownloadPackageAsync(packageId, version, repository, cache, logger, cancellationToken);
@@ -89,12 +89,12 @@ internal class NuGetPackageResolver
         {
             errors.Add($"NuGet initialization failed: {ex.Message}");
         }
-        
+
         return (references, errors);
     }
 
     private static async Task<List<string>> DownloadPackageAsync(
-        string packageId, 
+        string packageId,
         string versionString,
         SourceRepository repository,
         SourceCacheContext cache,
@@ -105,7 +105,7 @@ internal class NuGetPackageResolver
         var version = NuGetVersion.Parse(versionString);
         var packageIdentity = new PackageIdentity(packageId, version);
         var packagePath = Path.Combine(PackagesDirectory, $"{packageId}.{version}");
-        
+
         // Check if package is already downloaded
         var libPath = Path.Combine(packagePath, "lib");
         if (Directory.Exists(libPath))
@@ -131,7 +131,7 @@ internal class NuGetPackageResolver
         // Extract package
         packageStream.Seek(0, SeekOrigin.Begin);
         using var reader = new PackageArchiveReader(packageStream);
-        
+
         var framework = NuGetFramework.Parse("net9.0");
         var items = reader.GetLibItems().ToList();
         var compatible = items.Where(x => DefaultCompatibilityProvider.Instance.IsCompatible(framework, x.TargetFramework))
@@ -141,7 +141,7 @@ internal class NuGetPackageResolver
         if (compatible == null)
         {
             // Try to find any .NET Standard or .NET Core compatible version
-            compatible = items.Where(x => x.TargetFramework.Framework == ".NETStandard" || 
+            compatible = items.Where(x => x.TargetFramework.Framework == ".NETStandard" ||
                                          x.TargetFramework.Framework == ".NETCoreApp")
                               .OrderByDescending(x => x.TargetFramework.Version)
                               .FirstOrDefault();
@@ -160,7 +160,7 @@ internal class NuGetPackageResolver
             {
                 var targetPath = Path.Combine(packagePath, file);
                 Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-                
+
                 using var fileStream = reader.GetStream(file);
                 using var targetStream = File.Create(targetPath);
                 await fileStream.CopyToAsync(targetStream, cancellationToken);
@@ -174,7 +174,7 @@ internal class NuGetPackageResolver
             .ToList();
 
         var assemblies = GetAssembliesFromPackage(packagePath);
-        
+
         // Recursively download dependencies
         foreach (var dependency in dependencies)
         {
@@ -193,7 +193,7 @@ internal class NuGetPackageResolver
     {
         var assemblies = new List<string>();
         var directories = new[] { "lib/net9.0", "lib/net8.0", "lib/net7.0", "lib/net6.0", "lib/net5.0", "lib/netstandard2.1", "lib/netstandard2.0" };
-        
+
         foreach (var dir in directories)
         {
             var fullPath = Path.Combine(packagePath, dir);

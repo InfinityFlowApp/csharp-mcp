@@ -53,7 +53,7 @@ public class CSharpEvalTools
                     // Only apply this restriction when NOT running in Docker (Docker has volume mounts)
                     var isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
                     var allowedPath = Environment.GetEnvironmentVariable("CSX_ALLOWED_PATH");
-                    
+
                     if (!isDocker && !string.IsNullOrEmpty(allowedPath))
                     {
                         var normalizedAllowedPath = Path.GetFullPath(allowedPath);
@@ -82,7 +82,7 @@ public class CSharpEvalTools
 
             // Resolve NuGet packages if any and remove #r directives from script
             var (nugetReferences, errors) = await NuGetPackageResolver.ResolvePackagesAsync(scriptCode);
-            
+
             // If there were errors resolving packages, return them
             if (errors.Count > 0)
             {
@@ -95,14 +95,14 @@ public class CSharpEvalTools
                 }
                 return errorBuilder.ToString().TrimEnd();
             }
-            
+
             // Remove #r directives from the script since we're handling them separately
             var cleanedScript = System.Text.RegularExpressions.Regex.Replace(
-                scriptCode, 
-                @"^\s*#r\s+""nuget:[^""]*"".*$", 
-                "", 
+                scriptCode,
+                @"^\s*#r\s+""nuget:[^""]*"".*$",
+                "",
                 System.Text.RegularExpressions.RegexOptions.Multiline);
-            
+
             // Create script options with common assemblies and imports
             var scriptOptions = ScriptOptions.Default
                 .WithReferences(
@@ -144,8 +144,8 @@ public class CSharpEvalTools
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
 
                 // Run script in a task so we can properly handle timeout
-                var scriptTask = Task.Run(async () => 
-                    await CSharpScript.EvaluateAsync(cleanedScript, scriptOptions, cancellationToken: cts.Token), 
+                var scriptTask = Task.Run(async () =>
+                    await CSharpScript.EvaluateAsync(cleanedScript, scriptOptions, cancellationToken: cts.Token),
 
                                           var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds));
                 var completedTask = await Task.WhenAny(scriptTask, timeoutTask);
