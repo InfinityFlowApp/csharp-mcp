@@ -1,0 +1,113 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+categories:
+  - title: '🚀 Features'
+    labels:
+      - 'feature'
+      - 'enhancement'
+  - title: '🐛 Bug Fixes'
+    labels:
+      - 'fix'
+      - 'bugfix'
+      - 'bug'
+  - title: '🧰 Maintenance'
+    labels:
+      - 'chore'
+      - 'maintenance'
+  - title: '📚 Documentation'
+    labels:
+      - 'documentation'
+      - 'docs'
+  - title: '🔒 Security'
+    labels:
+      - 'security'
+  - title: '⬆️ Dependencies'
+    labels:
+      - 'dependencies'
+    collapse-after: 5
+
+change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
+change-title-escapes: '\<*_&'
+
+version-resolver:
+  major:
+    labels:
+      - 'major'
+      - 'breaking-change'
+  minor:
+    labels:
+      - 'minor'
+      - 'feature'
+      - 'enhancement'
+  patch:
+    labels:
+      - 'patch'
+      - 'bug'
+      - 'bugfix'
+      - 'fix'
+      - 'documentation'
+      - 'dependencies'
+      - 'chore'
+  default: patch
+
+autolabeler:
+  - label: 'feature'
+    branch:
+      - '/^feat(ure)?[/-].+/'
+  - label: 'bug'
+    branch:
+      - '/^(bug)?fix[/-].+/'
+  - label: 'chore'
+    branch:
+      - '/^chore[/-].+/'
+  - label: 'documentation'
+    branch:
+      - '/^docs?[/-].+/'
+    files:
+      - '*.md'
+      - 'docs/**'
+  - label: 'dependencies'
+    files:
+      - 'Directory.Packages.props'
+      - '*.csproj'
+      - 'Dockerfile'
+
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  ## 📦 Installation
+
+  ### Docker
+  ```bash
+  docker pull ghcr.io/infinityflowapp/csharp-mcp:$RESOLVED_VERSION
+  ```
+
+  ### .NET Tool
+  ```bash
+  dotnet tool install -g InfinityFlow.CSharp.Eval --version $RESOLVED_VERSION
+  ```
+
+  ### NuGet Package
+  ```xml
+  <PackageReference Include="InfinityFlow.CSharp.Eval" Version="$RESOLVED_VERSION" />
+  ```
+
+  ## 🏃 Running
+
+  ### Docker
+  ```bash
+  docker run -it ghcr.io/infinityflowapp/csharp-mcp:$RESOLVED_VERSION
+  ```
+
+  ### .NET Tool
+  ```bash
+  infinityflow-csharp-eval
+  ```
+
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+
+  ## Contributors
+  
+  $CONTRIBUTORS

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schemas/draft/2025-07-09/server.json",
+  "description": "An MCP server that evaluates and executes C# scripts using Roslyn",
+  "name": "io.github.infinityflowapp/csharp-mcp",
+  "packages": [
+    {
+      "registry_name": "nuget",
+      "name": "InfinityFlow.CSharp.Eval",
+      "version": "1.0.0",
+      "package_arguments": [],
+      "environment_variables": []
+    }
+  ],
+  "repository": {
+    "url": "https://github.com/InfinityFlowApp/csharp-mcp",
+    "source": "github"
+  },
+  "version_detail": {
+    "version": "1.0.0"
+  }
+}

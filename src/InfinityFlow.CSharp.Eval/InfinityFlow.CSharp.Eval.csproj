@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Set up the NuGet package to be an MCP server and dotnet tool -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>infinityflow-csharp-eval</ToolCommandName>
+    <PackageType>McpServer;DotnetTool</PackageType>
+
+    <!-- Set recommended package metadata -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageId>InfinityFlow.CSharp.Eval</PackageId>
+    <PackageVersion>1.0.0</PackageVersion>
+    <Authors>InfinityFlow</Authors>
+    <Company>InfinityFlow</Company>
+    <PackageTags>AI; MCP; server; stdio; csharp; eval; roslyn; scripting</PackageTags>
+    <Description>An MCP server that evaluates and executes C# scripts using Roslyn.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/InfinityFlowApp/csharp-mcp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <!-- Include additional files for browsing the MCP server. -->
+  <ItemGroup>
+    <None Include=".mcp\server.json" Pack="true" PackagePath="/.mcp/" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="ModelContextProtocol" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="InfinityFlow.CSharp.Eval.Tests" />
+  </ItemGroup>
+
+</Project>
