@@ -19,45 +19,78 @@ internal class NuGetPackageResolver
 {
     private static readonly string PackagesDirectory = Path.Combine(Path.GetTempPath(), "csharp-mcp-packages");
     private static readonly Regex NuGetDirectiveRegex = new(@"#r\s+""nuget:\s*([^,]+),\s*([^""]+)""", RegexOptions.Compiled);
+    private static readonly Regex AnyNuGetDirectiveRegex = new(@"#r\s+""nuget:[^""]*""", RegexOptions.Compiled);
     
     static NuGetPackageResolver()
     {
         Directory.CreateDirectory(PackagesDirectory);
     }
 
-    public static async Task<List<MetadataReference>> ResolvePackagesAsync(string scriptCode, CancellationToken cancellationToken = default)
+    public static async Task<(List<MetadataReference> References, List<string> Errors)> ResolvePackagesAsync(string scriptCode, CancellationToken cancellationToken = default)
     {
         var references = new List<MetadataReference>();
-        var matches = NuGetDirectiveRegex.Matches(scriptCode);
+        var errors = new List<string>();
         
-        if (matches.Count == 0)
-            return references;
-
-        var logger = NullLogger.Instance;
-        var cache = new SourceCacheContext();
-        var settings = Settings.LoadDefaultSettings(null);
-        var repository = Repository.Factory.GetCoreV3("https://api.nuget.org/v3/index.json");
+        // First, find all #r "nuget:..." directives
+        var allNuGetDirectives = AnyNuGetDirectiveRegex.Matches(scriptCode);
         
-        foreach (Match match in matches)
+        // Then find properly formatted ones
+        var validMatches = NuGetDirectiveRegex.Matches(scriptCode);
+        
+        // Check for malformed directives
+        foreach (Match directive in allNuGetDirectives)
         {
-            var packageId = match.Groups[1].Value.Trim();
-            var version = match.Groups[2].Value.Trim();
-            
-            try
+            bool isValid = false;
+            foreach (Match valid in validMatches)
             {
-                var assemblies = await DownloadPackageAsync(packageId, version, repository, cache, logger, cancellationToken);
-                foreach (var assembly in assemblies)
+                if (valid.Value == directive.Value)
                 {
-                    references.Add(MetadataReference.CreateFromFile(assembly));
+                    isValid = true;
+                    break;
                 }
             }
-            catch (Exception ex)
+            
+            if (!isValid)
             {
-                throw new InvalidOperationException($"Failed to resolve NuGet package '{packageId}' version '{version}': {ex.Message}", ex);
+                errors.Add($"Invalid NuGet directive syntax: {directive.Value}. Expected format: #r \"nuget: PackageName, Version\"");
             }
         }
         
-        return references;
+        if (validMatches.Count == 0 && errors.Count == 0)
+            return (references, errors);
+
+        try
+        {
+            var logger = NullLogger.Instance;
+            var cache = new SourceCacheContext();
+            var settings = Settings.LoadDefaultSettings(null);
+            var repository = Repository.Factory.GetCoreV3("https://api.nuget.org/v3/index.json");
+            
+            foreach (Match match in validMatches)
+            {
+                var packageId = match.Groups[1].Value.Trim();
+                var version = match.Groups[2].Value.Trim();
+                
+                try
+                {
+                    var assemblies = await DownloadPackageAsync(packageId, version, repository, cache, logger, cancellationToken);
+                    foreach (var assembly in assemblies)
+                    {
+                        references.Add(MetadataReference.CreateFromFile(assembly));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"Failed to resolve NuGet package '{packageId}' version '{version}': {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"NuGet initialization failed: {ex.Message}");
+        }
+        
+        return (references, errors);
     }
 
     private static async Task<List<string>> DownloadPackageAsync(
