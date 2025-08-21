@@ -51,4 +51,4 @@ ENV NUGET_PACKAGES=/tmp/csharp-mcp-packages
 ENV DOTNET_RUNNING_IN_CONTAINER=true
 
 # The MCP server uses stdio for communication
-ENTRYPOINT ["dotnet", "/app/InfinityFlow.CSharp.Eval.dll"]
+ENTRYPOINT ["dotnet", "InfinityFlow.CSharp.Eval.dll"]
