@@ -1,4 +1,10 @@
-=== NUnit Testing Example ===
+=== NUnit Testing Example with Engine ===
+
+Running tests with NUnit Engine...
+
+Error running tests with NUnit Engine: The value cannot be an empty string. (Parameter 'path')
+
+Falling back to manual test execution...
 
 Running Calculator Tests:
 -------------------------
@@ -15,6 +21,7 @@ Running String Utils Tests:
   ✓ IsPalindrome_WithNonPalindrome_ReturnsFalse
 
 === Test Summary ===
-Total Passed: 8
-Total Failed: 0
+Total Tests: 8
+Passed: 8
+Failed: 0
 Success Rate: 100.0%

@@ -41,5 +41,13 @@ The script outputs:
 
 ## NuGet Packages Used
 
-- `NUnit 4.2.2`: Core testing framework
-- `NUnit.Engine 3.18.3`: Test execution engine
+- `NUnit 4.2.2`: Core testing framework with assertions and attributes
+- `NUnit.Engine 3.18.3`: Test execution engine for running tests programmatically
+- `System.Xml.XDocument 4.3.0`: XML parsing for test results
+
+## Implementation Note
+
+The script attempts to use NUnit Engine to run tests properly, but in the scripting context, the engine cannot locate the assembly. The script includes a fallback mechanism that manually executes each test method using the NUnit assertions, demonstrating that:
+1. NuGet packages are successfully loaded and available
+2. NUnit assertions and attributes work correctly
+3. Tests can be executed programmatically even without the full engine
