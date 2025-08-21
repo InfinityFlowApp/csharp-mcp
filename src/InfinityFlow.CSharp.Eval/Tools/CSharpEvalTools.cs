@@ -146,8 +146,9 @@ public class CSharpEvalTools
                 // Run script in a task so we can properly handle timeout
                 var scriptTask = Task.Run(async () =>
                     await CSharpScript.EvaluateAsync(cleanedScript, scriptOptions, cancellationToken: cts.Token),
+                    cts.Token);
 
-                                          var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds));
+                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds));
                 var completedTask = await Task.WhenAny(scriptTask, timeoutTask);
 
                 if (completedTask == timeoutTask)
