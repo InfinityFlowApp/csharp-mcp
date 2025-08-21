@@ -183,11 +183,11 @@ result";
     }
 
     [Test]
-    [Ignore("Timeout functionality needs refinement - infinite loops may not respect cancellation")]
     public async Task EvalCSharp_WithTimeout_ReturnsTimeoutError()
     {
         // Arrange
-        var code = "while(true) { }"; // Infinite loop
+        // Use Thread.Sleep which will actually block and trigger timeout
+        var code = "System.Threading.Thread.Sleep(3000); \"Should not complete\"";
 
         // Act
         var result = await _sut.EvalCSharp(csx: code, timeoutSeconds: 1); // 1 second timeout
