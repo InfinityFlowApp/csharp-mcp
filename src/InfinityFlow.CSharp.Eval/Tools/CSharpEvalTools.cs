@@ -45,6 +45,18 @@ internal class CSharpEvalTools
                         return $"Error: Only .csx files are allowed. Provided: {csxFile}";
                     }
                     
+                    // Optional: Restrict to specific directories for additional security
+                    // This can be configured via environment variable
+                    var allowedPath = Environment.GetEnvironmentVariable("CSX_ALLOWED_PATH");
+                    if (!string.IsNullOrEmpty(allowedPath))
+                    {
+                        var normalizedAllowedPath = Path.GetFullPath(allowedPath);
+                        if (!fullPath.StartsWith(normalizedAllowedPath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return $"Error: File access is restricted to {normalizedAllowedPath}";
+                        }
+                    }
+                    
                     if (!File.Exists(fullPath))
                     {
                         return $"Error: File not found: {fullPath}";

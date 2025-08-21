@@ -244,6 +244,9 @@ This will:
 - 🔐 Console output is captured to prevent interference with MCP stdio protocol
 - 🐳 Docker container runs as non-root user for additional security
 - 🛡️ Use appropriate sandboxing when running untrusted scripts
+- 📁 File access can be restricted via `CSX_ALLOWED_PATH` environment variable
+- 🔒 Only .csx files are allowed for execution
+- ⏱️ Scripts have a configurable timeout (default 30 seconds)
 
 ## Contributing
 

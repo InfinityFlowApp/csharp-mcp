@@ -162,6 +162,27 @@ result";
     }
 
     [Test]
+    public async Task EvalCSharp_WithRestrictedPath_ReturnsError()
+    {
+        // Arrange
+        var restrictedFile = "/etc/passwd.csx";
+        Environment.SetEnvironmentVariable("CSX_ALLOWED_PATH", "/tmp");
+
+        try
+        {
+            // Act
+            var result = await _sut.EvalCSharp(csxFile: restrictedFile);
+
+            // Assert
+            result.Should().StartWith("Error: File access is restricted to");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CSX_ALLOWED_PATH", null);
+        }
+    }
+
+    [Test]
     [Ignore("Timeout functionality needs refinement - infinite loops may not respect cancellation")]
     public async Task EvalCSharp_WithTimeout_ReturnsTimeoutError()
     {
