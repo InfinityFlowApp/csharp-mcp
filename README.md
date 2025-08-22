@@ -189,13 +189,25 @@ Or if installed via dnx:
 Add the MCP server using the CLI:
 
 **Using Docker:**
+
+*Basic setup:*
 ```bash
-claude mcp add csharp-eval docker run -i --rm --pull=always -v "${HOME}:${HOME}" -w "${PWD}" ghcr.io/infinityflowapp/csharp-mcp:latest
+claude mcp add csharp-eval docker -- run -i --rm ghcr.io/infinityflowapp/csharp-mcp:latest
+```
+
+*With file system access:*
+```bash
+claude mcp add csharp-eval docker -- run -i --rm --pull=always -v "${HOME}:${HOME}" -w "${PWD}" ghcr.io/infinityflowapp/csharp-mcp:latest
+```
+
+*With restricted script directory:*
+```bash
+claude mcp add csharp-eval -e CSX_ALLOWED_PATH="/scripts" docker -- run -i --rm -v "${HOME}/scripts:/scripts:ro" ghcr.io/infinityflowapp/csharp-mcp:latest
 ```
 
 **Using dnx:**
 ```bash
-claude mcp add csharp-eval dnx run InfinityFlow.CSharp.Eval -e CSX_ALLOWED_PATH="/Users/your-username/scripts"
+claude mcp add csharp-eval -e CSX_ALLOWED_PATH="/Users/your-username/scripts" dnx -- run InfinityFlow.CSharp.Eval
 ```
 
 The volume mounting (`-v ${HOME}:${HOME}`) allows the tool to access .csx files from your filesystem.
