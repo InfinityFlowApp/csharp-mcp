@@ -6,10 +6,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
 
-    <!-- Set up the NuGet package to be an MCP server and dotnet tool -->
+    <!-- Set up the NuGet package to be an MCP server -->
     <PackAsTool>true</PackAsTool>
-    <ToolCommandName>infinityflow-csharp-eval</ToolCommandName>
-    <PackageType>McpServer;DotnetTool</PackageType>
+    <PackageType>McpServer</PackageType>
 
     <!-- Set recommended package metadata -->
     <PackageReadmeFile>README.md</PackageReadmeFile>
