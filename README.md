@@ -186,45 +186,19 @@ Or if installed via dnx:
 
 ### Claude Code
 
-Add to your Claude Code configuration (`claude_desktop_config.json`):
+Add the MCP server using the CLI:
 
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux**: `~/.config/claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "csharp-eval": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm", "--pull=always",
-        "-v", "${HOME}:${HOME}",
-        "-w", "${PWD}",
-        "ghcr.io/infinityflowapp/csharp-mcp:latest"
-      ]
-    }
-  }
-}
+**Using Docker:**
+```bash
+claude mcp add csharp-eval docker run -i --rm --pull=always -v "${HOME}:${HOME}" -w "${PWD}" ghcr.io/infinityflowapp/csharp-mcp:latest
 ```
 
-Note: The volume mounting (`-v ${HOME}:${HOME}`) allows the tool to access .csx files from your filesystem.
-
-Or if installed via dnx:
-
-```json
-{
-  "mcpServers": {
-    "csharp-eval": {
-      "command": "dnx",
-      "args": ["run", "InfinityFlow.CSharp.Eval"],
-      "env": {
-        "CSX_ALLOWED_PATH": "/Users/your-username/scripts"
-      }
-    }
-  }
-}
+**Using dnx:**
+```bash
+claude mcp add csharp-eval dnx run InfinityFlow.CSharp.Eval -e CSX_ALLOWED_PATH="/Users/your-username/scripts"
 ```
+
+The volume mounting (`-v ${HOME}:${HOME}`) allows the tool to access .csx files from your filesystem.
 
 ### VS Code
 
