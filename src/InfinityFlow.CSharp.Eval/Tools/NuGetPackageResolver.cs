@@ -20,6 +20,9 @@ internal class NuGetPackageResolver
     private static readonly Regex NuGetDirectiveRegex = new(@"#r\s+""nuget:\s*([^,]+),\s*([^""]+)""", RegexOptions.Compiled);
     private static readonly Regex AnyNuGetDirectiveRegex = new(@"#r\s+""nuget:[^""]*""", RegexOptions.Compiled);
 
+    private const int MaxRecursionDepth = 10;
+    private const string TargetFramework = "net9.0";
+
     static NuGetPackageResolver()
     {
         Directory.CreateDirectory(PackagesDirectory);
@@ -102,7 +105,8 @@ internal class NuGetPackageResolver
         SourceRepository repository,
         SourceCacheContext cache,
         ILogger logger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int depth = 0)
     {
         var resource = await repository.GetResourceAsync<FindPackageByIdResource>(cancellationToken);
         var version = NuGetVersion.Parse(versionString);
@@ -179,7 +183,7 @@ internal class NuGetPackageResolver
         }
 
         ResolvedPackages.TryAdd(packageKey, true);
-        return await ResolveTransitiveDependenciesAsync(packagePath, packageId, version, repository, cache, logger, cancellationToken);
+        return await ResolveTransitiveDependenciesAsync(packagePath, packageId, version, repository, cache, logger, cancellationToken, depth);
     }
 
     private static async Task<List<string>> ResolveTransitiveDependenciesAsync(
@@ -189,8 +193,16 @@ internal class NuGetPackageResolver
         SourceRepository repository,
         SourceCacheContext cache,
         ILogger logger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int depth = 0)
     {
+        // Prevent infinite recursion
+        if (depth >= MaxRecursionDepth)
+        {
+            logger.LogWarning($"Maximum recursion depth ({MaxRecursionDepth}) reached for package {packageId}. Stopping transitive resolution.");
+            return GetAssembliesFromPackage(packagePath);
+        }
+
         var assemblies = GetAssembliesFromPackage(packagePath);
 
         // Get package dependencies for transitive resolution
@@ -211,7 +223,7 @@ internal class NuGetPackageResolver
                 packageStream.Seek(0, SeekOrigin.Begin);
                 using var reader = new PackageArchiveReader(packageStream);
 
-                var framework = NuGetFramework.Parse("net9.0");
+                var framework = NuGetFramework.Parse(TargetFramework);
                 var dependencies = reader.GetPackageDependencies()
                     .Where(x => DefaultCompatibilityProvider.Instance.IsCompatible(framework, x.TargetFramework))
                     .SelectMany(x => x.Packages)
@@ -225,7 +237,7 @@ internal class NuGetPackageResolver
                         try
                         {
                             var depVersion = GetBestVersionForDependency(dependency);
-                            var depAssemblies = await DownloadPackageAsync(dependency.Id, depVersion, repository, cache, logger, cancellationToken);
+                            var depAssemblies = await DownloadPackageAsync(dependency.Id, depVersion, repository, cache, logger, cancellationToken, depth + 1);
                             assemblies.AddRange(depAssemblies);
                         }
                         catch (Exception ex)
@@ -237,7 +249,7 @@ internal class NuGetPackageResolver
                                 continue;
                             }
                             // Log other dependency resolution failures but continue
-                            Console.WriteLine($"Warning: Failed to resolve dependency '{dependency.Id}': {ex.Message}");
+                            logger.LogWarning($"Failed to resolve dependency '{dependency.Id}': {ex.Message}");
                         }
                     }
                 }
@@ -245,12 +257,12 @@ internal class NuGetPackageResolver
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Warning: Failed to resolve transitive dependencies for '{packageId}': {ex.Message}");
+            logger.LogWarning($"Failed to resolve transitive dependencies for '{packageId}': {ex.Message}");
         }
 
         // Remove duplicates and prefer newer versions
         var uniqueAssemblies = new Dictionary<string, string>();
-        
+
         foreach (var assembly in assemblies)
         {
             var fileName = Path.GetFileNameWithoutExtension(assembly);
@@ -267,7 +279,7 @@ internal class NuGetPackageResolver
                 }
             }
         }
-        
+
         return uniqueAssemblies.Values.ToList();
     }
 
@@ -290,7 +302,7 @@ internal class NuGetPackageResolver
         var systemSkipPrefixes = new[]
         {
             "System.Runtime",
-            "System.Collections", 
+            "System.Collections",
             "System.Linq",
             "System.Threading.Tasks",
             "System.IO",
@@ -353,7 +365,7 @@ internal class NuGetPackageResolver
     private static List<string> GetAssembliesFromPackage(string packagePath)
     {
         var assemblies = new List<string>();
-        var directories = new[] { "lib/net9.0", "lib/net8.0", "lib/net7.0", "lib/net6.0", "lib/net5.0", "lib/netstandard2.1", "lib/netstandard2.0" };
+        var directories = new[] { "lib/net10.0", "lib/net9.0", "lib/net8.0", "lib/net7.0", "lib/net6.0", "lib/net5.0", "lib/netstandard2.1", "lib/netstandard2.0" };
 
         foreach (var dir in directories)
         {
