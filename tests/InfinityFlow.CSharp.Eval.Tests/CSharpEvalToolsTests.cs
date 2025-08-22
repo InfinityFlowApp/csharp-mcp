@@ -190,13 +190,13 @@ var z = 10;";
             Assert.Ignore("Path restrictions are disabled in Docker containers");
             return;
         }
-        
-        // Arrange
-        var restrictedFile = "/etc/passwd.csx";
-        Environment.SetEnvironmentVariable("CSX_ALLOWED_PATH", "/tmp");
 
         try
         {
+            // Arrange
+            var restrictedFile = "/etc/passwd.csx";
+            Environment.SetEnvironmentVariable("CSX_ALLOWED_PATH", "/tmp");
+
             // Act
             var result = await _sut.EvalCSharp(csxFile: restrictedFile);
 
@@ -265,58 +265,63 @@ Console.WriteLine(""Async execution completed"");
     {
         // Arrange
         // AutoMapper.Extensions.Microsoft.DependencyInjection has transitive dependencies on AutoMapper
-        var code = @"
-#r ""nuget: AutoMapper.Extensions.Microsoft.DependencyInjection, 12.0.1""
+        var code = """
+            #r "nuget: AutoMapper, 15.0.1"
 
-using AutoMapper;
-using Microsoft.Extensions.DependencyInjection;
+            using AutoMapper;
+            using Microsoft.Extensions.DependencyInjection;
+            using Microsoft.Extensions.Logging;
+            using System;
 
-// AutoMapper.Extensions.Microsoft.DependencyInjection has transitive dependencies on:
-// - AutoMapper (core library)
-// - Microsoft.Extensions.DependencyInjection.Abstractions
-// This test verifies that all transitive dependencies are properly resolved
+            // Create a service collection to prove transitive dependencies work
+            var services = new ServiceCollection();
 
-// Create a service collection and add AutoMapper
-var services = new ServiceCollection();
+            // Add logging services that AutoMapper requires
+            services.AddLogging();
 
-// Define a simple mapping profile
-var config = new MapperConfiguration(cfg => {
-    cfg.CreateMap<SourceClass, DestClass>();
-});
+            // Register AutoMapper into DI
+            services.AddAutoMapper(cfg =>
+            {
+                cfg.CreateMap<SourceClass, DestClass>();
+            });
 
-// Create mapper from configuration (uses AutoMapper core)
-var mapper = config.CreateMapper();
+            // Build the provider
+            var provider = services.BuildServiceProvider();
 
-// Define test classes
-class SourceClass { public string Name { get; set; } public int Value { get; set; } }
-class DestClass { public string Name { get; set; } public int Value { get; set; } }
+            // Resolve the mapper
+            var mapper = provider.GetRequiredService<IMapper>();
 
-// Test the mapping
-var source = new SourceClass { Name = ""Test"", Value = 42 };
-var dest = mapper.Map<DestClass>(source);
+            // Define test classes
+            class SourceClass 
+            { 
+                public string Name { get; set; } 
+                public int Value { get; set; } 
+            }
+            class DestClass 
+            { 
+                public string Name { get; set; } 
+                public int Value { get; set; } 
+            }
 
-Console.WriteLine($""Mapped Name: {dest.Name}"");
-Console.WriteLine($""Mapped Value: {dest.Value}"");
-Console.WriteLine($""AutoMapper version: {typeof(Mapper).Assembly.GetName().Version}"");
+            // Test the mapping
+            var source = new SourceClass { Name = "Test", Value = 42 };
+            var dest = mapper.Map<DestClass>(source);
 
-""AutoMapper with transitive dependencies works! Successfully used AutoMapper.Extensions.Microsoft.DependencyInjection and AutoMapper core.""
-";
+            Console.WriteLine($"Mapped Name: {dest.Name}");
+            Console.WriteLine($"Mapped Value: {dest.Value}");
+            Console.WriteLine($"AutoMapper version: {typeof(Mapper).Assembly.GetName().Version}");
+
+            Console.WriteLine("AutoMapper with transitive dependencies works! Successfully used Microsoft.Extensions.DependencyInjection and AutoMapper core.");
+""";
 
         // Act
         var result = await _sut.EvalCSharp(csx: code);
 
-        // Assert
-        if (result.Contains("Failed to resolve NuGet package") || result.Contains("CS0234") || result.Contains("CS0246"))
-        {
-            // If we get compilation errors about missing types or failed resolution, NuGet support isn't available
-            Assert.Ignore("NuGet package resolution not available in this environment or transitive dependencies couldn't be resolved");
-            return;
-        }
 
         result.Should().NotContain("Compilation Error", "Script should compile without errors");
         result.Should().Contain("AutoMapper with transitive dependencies works!");
-        result.Should().Contain("Successfully used AutoMapper.Extensions.Microsoft.DependencyInjection and AutoMapper core");
-        
+        result.Should().Contain("Successfully used Microsoft.Extensions.DependencyInjection and AutoMapper core");
+
         // Verify the output from using the packages
         result.Should().Contain("Mapped Name: Test");
         result.Should().Contain("Mapped Value: 42");

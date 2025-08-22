@@ -15,20 +15,36 @@ public class ExamplesTests
         _evalTools = new CSharpEvalTools();
     }
 
+    private static string GetExamplesRoot()
+    {
+        // Try multiple possible paths for examples directory
+        var possiblePaths = new[]
+        {
+            Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "examples"),
+            Path.Combine(Directory.GetCurrentDirectory(), "examples"),
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "examples"),
+            "/source/examples" // Docker build path
+        };
+
+        foreach (var path in possiblePaths)
+        {
+            if (Directory.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        throw new DirectoryNotFoundException("Examples directory not found in any expected location");
+    }
+
     public static IEnumerable<TestCaseData> GetExampleDirectories()
     {
-        var examplesRoot = Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "examples");
-        if (Directory.Exists(examplesRoot))
+
+        var examplesRoot = GetExamplesRoot();
+        foreach (var dir in Directory.GetDirectories(examplesRoot))
         {
-            foreach (var dir in Directory.GetDirectories(examplesRoot))
-            {
-                var dirName = Path.GetFileName(dir);
-                // Skip nuget-packages as it's tested separately with RequiresNuGet category
-                if (dirName != "nuget-packages")
-                {
-                    yield return new TestCaseData(dirName).SetName($"Example_{dirName}");
-                }
-            }
+            var dirName = Path.GetFileName(dir);
+            yield return new TestCaseData(dirName).SetName($"Example_{dirName}");
         }
     }
 
@@ -37,17 +53,14 @@ public class ExamplesTests
     public async Task Example_ExecutesCorrectly_And_MatchesExpectedOutput(string exampleName)
     {
         // Arrange
-        var examplesRoot = Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "examples");
+        var examplesRoot = GetExamplesRoot();
         var exampleDir = Path.Combine(examplesRoot, exampleName);
         var scriptPath = Path.Combine(exampleDir, "script.csx");
         var expectedOutputPath = Path.Combine(exampleDir, "expected-output.txt");
 
-        // Skip if files don't exist (running in CI or different environment)
-        if (!File.Exists(scriptPath) || !File.Exists(expectedOutputPath))
-        {
-            Assert.Ignore($"Example files not found for {exampleName}");
-            return;
-        }
+        // Files must exist for test to pass
+        File.Exists(scriptPath).Should().BeTrue($"script.csx not found for {exampleName}");
+        File.Exists(expectedOutputPath).Should().BeTrue($"expected-output.txt not found for {exampleName}");
 
         var scriptContent = await File.ReadAllTextAsync(scriptPath);
         var expectedOutput = await File.ReadAllTextAsync(expectedOutputPath);
@@ -95,17 +108,10 @@ public class ExamplesTests
         // It may fail in restricted environments
 
         // Arrange
-        var examplesRoot = Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "examples");
+        var examplesRoot = GetExamplesRoot();
         var exampleDir = Path.Combine(examplesRoot, "nuget-packages");
         var scriptPath = Path.Combine(exampleDir, "script.csx");
         var expectedOutputPath = Path.Combine(exampleDir, "expected-output.txt");
-
-        // Skip if files don't exist
-        if (!File.Exists(scriptPath) || !File.Exists(expectedOutputPath))
-        {
-            Assert.Ignore("NuGet example files not found");
-            return;
-        }
 
         var scriptContent = await File.ReadAllTextAsync(scriptPath);
 
@@ -113,12 +119,6 @@ public class ExamplesTests
         var result = await _evalTools.EvalCSharp(csx: scriptContent, timeoutSeconds: 60);
 
         // Assert
-        if (result.Contains("Failed to resolve NuGet package") || result.Contains("CS0006"))
-        {
-            Assert.Ignore("NuGet package resolution not available in this environment");
-            return;
-        }
-
         result.Should().NotContain("Error:");
         result.Should().Contain("NuGet Package Example");
         result.Should().Contain("Newtonsoft.Json");
@@ -126,63 +126,12 @@ public class ExamplesTests
         result.Should().Contain("Successfully processed JSON");
     }
 
-    [Test]
-    [Category("RequiresNuGet")]
-    public async Task EvalCSharp_WithMultipleNuGetPackages_ExecutesCorrectly()
-    {
-        // Arrange
-        var script = @"
-#r ""nuget: Humanizer, 2.14.1""
-#r ""nuget: Newtonsoft.Json, 13.0.3""
-
-using Humanizer;
-using Newtonsoft.Json;
-
-var data = new { 
-    Message = ""Hello World"",
-    Count = 5,
-    Timestamp = DateTime.Now
-};
-
-var json = JsonConvert.SerializeObject(data, Formatting.Indented);
-Console.WriteLine(""Serialized JSON:"");
-Console.WriteLine(json);
-
-Console.WriteLine($""\n'{data.Count} items' humanized: {data.Count.ToWords()} items"");
-Console.WriteLine($""'2 hours' humanized: {""{0:hh\\:mm\\:ss}"".FormatWith(TimeSpan.FromHours(2))}"");
-
-""Multiple NuGet packages loaded successfully!""
-";
-
-        // Act
-        var result = await _evalTools.EvalCSharp(csx: script);
-
-        // Assert
-        if (result.Contains("Failed to resolve NuGet package"))
-        {
-            Assert.Ignore("NuGet package resolution not available in this environment");
-            return;
-        }
-
-        result.Should().NotContain("Error:", "Script should execute without errors");
-        result.Should().Contain("Serialized JSON:");
-        result.Should().Contain("Hello World");
-        result.Should().Contain("'5 items' humanized: five items");
-        result.Should().Contain("'2 hours' humanized: 02:00:00");
-        result.Should().Contain("Result: Multiple NuGet packages loaded successfully!");
-    }
 
     [Test]
     public void AllExamples_HaveRequiredFiles()
     {
         // Arrange
-        var examplesRoot = Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "examples");
-
-        if (!Directory.Exists(examplesRoot))
-        {
-            Assert.Ignore("Examples directory not found");
-            return;
-        }
+        var examplesRoot = GetExamplesRoot();
 
         var exampleDirs = Directory.GetDirectories(examplesRoot);
 

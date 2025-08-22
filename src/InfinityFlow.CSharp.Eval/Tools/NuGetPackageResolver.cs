@@ -1,5 +1,4 @@
-using System.Reflection;
-using System.Runtime.Loader;
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using NuGet.Common;
@@ -30,6 +29,8 @@ internal class NuGetPackageResolver
     {
         var references = new List<MetadataReference>();
         var errors = new List<string>();
+
+        // Note: ResolvedPackages is now a persistent cache for the session
 
         // First, find all #r "nuget:..." directives
         var allNuGetDirectives = AnyNuGetDirectiveRegex.Matches(scriptCode);
@@ -93,6 +94,8 @@ internal class NuGetPackageResolver
         return (references, errors);
     }
 
+    private static readonly ConcurrentDictionary<string, bool> ResolvedPackages = new();
+
     private static async Task<List<string>> DownloadPackageAsync(
         string packageId,
         string versionString,
@@ -105,12 +108,20 @@ internal class NuGetPackageResolver
         var version = NuGetVersion.Parse(versionString);
         var packageIdentity = new PackageIdentity(packageId, version);
         var packagePath = Path.Combine(PackagesDirectory, $"{packageId}.{version}");
+        var packageKey = $"{packageId}.{version}";
+
+        // Check if package is already resolved in this session
+        if (ResolvedPackages.ContainsKey(packageKey))
+        {
+            return GetAssembliesFromPackage(packagePath);
+        }
 
         // Check if package is already downloaded
         var libPath = Path.Combine(packagePath, "lib");
         if (Directory.Exists(libPath))
         {
-            return GetAssembliesFromPackage(packagePath);
+            ResolvedPackages.TryAdd(packageKey, true);
+            return await ResolveTransitiveDependenciesAsync(packagePath, packageId, version, repository, cache, logger, cancellationToken);
         }
 
         // Download package
@@ -167,26 +178,176 @@ internal class NuGetPackageResolver
             }
         }
 
-        // Also extract dependencies if needed
-        var dependencies = reader.GetPackageDependencies()
-            .Where(x => DefaultCompatibilityProvider.Instance.IsCompatible(framework, x.TargetFramework))
-            .SelectMany(x => x.Packages)
-            .ToList();
+        ResolvedPackages.TryAdd(packageKey, true);
+        return await ResolveTransitiveDependenciesAsync(packagePath, packageId, version, repository, cache, logger, cancellationToken);
+    }
 
+    private static async Task<List<string>> ResolveTransitiveDependenciesAsync(
+        string packagePath,
+        string packageId,
+        NuGetVersion version,
+        SourceRepository repository,
+        SourceCacheContext cache,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
         var assemblies = GetAssembliesFromPackage(packagePath);
 
-        // Recursively download dependencies
-        foreach (var dependency in dependencies)
+        // Get package dependencies for transitive resolution
+        try
         {
-            if (dependency.Id != "NETStandard.Library" && !dependency.Id.StartsWith("System.") && !dependency.Id.StartsWith("Microsoft.NETCore."))
+            using var packageStream = new MemoryStream();
+            var resource = await repository.GetResourceAsync<FindPackageByIdResource>(cancellationToken);
+            var downloaded = await resource.CopyNupkgToStreamAsync(
+                packageId,
+                version,
+                packageStream,
+                cache,
+                logger,
+                cancellationToken);
+
+            if (downloaded)
             {
-                var depVersion = dependency.VersionRange.MinVersion?.ToString() ?? "latest";
-                var depAssemblies = await DownloadPackageAsync(dependency.Id, depVersion, repository, cache, logger, cancellationToken);
-                assemblies.AddRange(depAssemblies);
+                packageStream.Seek(0, SeekOrigin.Begin);
+                using var reader = new PackageArchiveReader(packageStream);
+
+                var framework = NuGetFramework.Parse("net9.0");
+                var dependencies = reader.GetPackageDependencies()
+                    .Where(x => DefaultCompatibilityProvider.Instance.IsCompatible(framework, x.TargetFramework))
+                    .SelectMany(x => x.Packages)
+                    .ToList();
+
+                // Resolve dependencies with better filtering
+                foreach (var dependency in dependencies)
+                {
+                    if (ShouldResolveDependency(dependency.Id))
+                    {
+                        try
+                        {
+                            var depVersion = GetBestVersionForDependency(dependency);
+                            var depAssemblies = await DownloadPackageAsync(dependency.Id, depVersion, repository, cache, logger, cancellationToken);
+                            assemblies.AddRange(depAssemblies);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Skip dependencies that can't be resolved (likely built into .NET runtime)
+                            if (ex.Message.Contains("not found") || ex.Message.Contains("No compatible framework"))
+                            {
+                                // Silently skip built-in .NET packages
+                                continue;
+                            }
+                            // Log other dependency resolution failures but continue
+                            Console.WriteLine($"Warning: Failed to resolve dependency '{dependency.Id}': {ex.Message}");
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Failed to resolve transitive dependencies for '{packageId}': {ex.Message}");
+        }
+
+        // Remove duplicates and prefer newer versions
+        var uniqueAssemblies = new Dictionary<string, string>();
+        
+        foreach (var assembly in assemblies)
+        {
+            var fileName = Path.GetFileNameWithoutExtension(assembly);
+            if (!uniqueAssemblies.ContainsKey(fileName))
+            {
+                uniqueAssemblies[fileName] = assembly;
+            }
+            else
+            {
+                // Prefer assemblies from more specific framework versions (longer paths usually = more specific)
+                if (assembly.Length > uniqueAssemblies[fileName].Length)
+                {
+                    uniqueAssemblies[fileName] = assembly;
+                }
+            }
+        }
+        
+        return uniqueAssemblies.Values.ToList();
+    }
+
+    private static bool ShouldResolveDependency(string packageId)
+    {
+        // Skip framework reference packages and packages that are already in .NET runtime
+        var skipPrefixes = new[]
+        {
+            "Microsoft.NETCore.App",
+            "Microsoft.AspNetCore.App",
+            "Microsoft.WindowsDesktop.App"
+        };
+
+        var skipExact = new[]
+        {
+            "NETStandard.Library"
+        };
+
+        // Skip very basic System packages that cause version conflicts
+        var systemSkipPrefixes = new[]
+        {
+            "System.Runtime",
+            "System.Collections", 
+            "System.Linq",
+            "System.Threading.Tasks",
+            "System.IO",
+            "System.Text.",
+            "System.Globalization",
+            "System.Resources",
+            "System.Diagnostics.Debug",
+            "System.Diagnostics.Tools",
+            "System.Reflection",
+            "System.ComponentModel",
+            "System.Xml"
+        };
+
+        // Allow important Microsoft.Extensions packages that are commonly needed
+        if (packageId.StartsWith("Microsoft.Extensions.", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !skipPrefixes.Any(prefix => packageId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) &&
+               !skipExact.Any(exact => packageId.Equals(exact, StringComparison.OrdinalIgnoreCase)) &&
+               !systemSkipPrefixes.Any(prefix => packageId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string GetBestVersionForDependency(PackageDependency dependency)
+    {
+        // For Microsoft.Extensions packages, use specific known good versions
+        if (dependency.Id.StartsWith("Microsoft.Extensions.", StringComparison.OrdinalIgnoreCase))
+        {
+            // Use a stable version that works well with .NET 8/9
+            return "8.0.0";
+        }
+
+        // Use the minimum version if available, otherwise try to resolve latest compatible
+        if (dependency.VersionRange.MinVersion != null)
+        {
+            return dependency.VersionRange.MinVersion.ToString();
+        }
+
+        if (dependency.VersionRange.MaxVersion != null && dependency.VersionRange.IsMaxInclusive)
+        {
+            return dependency.VersionRange.MaxVersion.ToString();
+        }
+
+        // Try to extract a reasonable version from the range
+        if (!string.IsNullOrEmpty(dependency.VersionRange.OriginalString))
+        {
+            var versionString = dependency.VersionRange.OriginalString;
+            // Handle ranges like "[1.0.0,)" - use the minimum
+            if (versionString.StartsWith("[") && dependency.VersionRange.MinVersion != null)
+            {
+                return dependency.VersionRange.MinVersion.ToString();
             }
         }
 
-        return assemblies.Distinct().ToList();
+        // Default to a reasonable version range
+        return dependency.VersionRange.OriginalString ?? "latest";
     }
 
     private static List<string> GetAssembliesFromPackage(string packagePath)

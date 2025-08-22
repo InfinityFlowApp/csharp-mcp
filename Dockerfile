@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /source
 
 # Copy solution and project files
-COPY csharp-mcp.sln .
+COPY csharp-mcp.slnx .
 COPY Directory.Packages.props .
 COPY src/InfinityFlow.CSharp.Eval/*.csproj ./src/InfinityFlow.CSharp.Eval/
 COPY tests/InfinityFlow.CSharp.Eval.Tests/*.csproj ./tests/InfinityFlow.CSharp.Eval.Tests/
@@ -14,7 +14,7 @@ RUN dotnet restore
 # Copy source code
 COPY src/ ./src/
 COPY tests/ ./tests/
-
+COPY examples/ ./examples
 # Build and test
 RUN dotnet build -c Release --no-restore
 RUN dotnet test -c Release --no-build --verbosity normal
