@@ -22,6 +22,8 @@ internal class NuGetPackageResolver
 
     private const int MaxRecursionDepth = 10;
     private const string TargetFramework = "net9.0";
+    private const string MicrosoftExtensionsStableVersion = "8.0.0";
+    private static readonly TimeSpan NetworkOperationTimeout = TimeSpan.FromSeconds(30);
 
     static NuGetPackageResolver()
     {
@@ -69,6 +71,11 @@ internal class NuGetPackageResolver
             var cache = new SourceCacheContext();
             var settings = Settings.LoadDefaultSettings(null);
             var repository = Repository.Factory.GetCoreV3("https://api.nuget.org/v3/index.json");
+            
+            // Apply timeout to cancellation token for network operations
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(NetworkOperationTimeout);
+            var timeoutToken = timeoutCts.Token;
 
             foreach (Match match in validMatches)
             {
@@ -77,11 +84,15 @@ internal class NuGetPackageResolver
 
                 try
                 {
-                    var assemblies = await DownloadPackageAsync(packageId, version, repository, cache, logger, cancellationToken);
+                    var assemblies = await DownloadPackageAsync(packageId, version, repository, cache, logger, timeoutToken);
                     foreach (var assembly in assemblies)
                     {
                         references.Add(MetadataReference.CreateFromFile(assembly));
                     }
+                }
+                catch (OperationCanceledException) when (timeoutToken.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    errors.Add($"Failed to resolve NuGet package '{packageId}' version '{version}': Network operation timed out after {NetworkOperationTimeout.TotalSeconds} seconds");
                 }
                 catch (Exception ex)
                 {
@@ -147,7 +158,7 @@ internal class NuGetPackageResolver
         packageStream.Seek(0, SeekOrigin.Begin);
         using var reader = new PackageArchiveReader(packageStream);
 
-        var framework = NuGetFramework.Parse("net9.0");
+        var framework = NuGetFramework.Parse(TargetFramework);
         var items = reader.GetLibItems().ToList();
         var compatible = items.Where(x => DefaultCompatibilityProvider.Instance.IsCompatible(framework, x.TargetFramework))
                               .OrderByDescending(x => x.TargetFramework.Version)
@@ -333,7 +344,7 @@ internal class NuGetPackageResolver
         if (dependency.Id.StartsWith("Microsoft.Extensions.", StringComparison.OrdinalIgnoreCase))
         {
             // Use a stable version that works well with .NET 8/9
-            return "8.0.0";
+            return MicrosoftExtensionsStableVersion;
         }
 
         // Use the minimum version if available, otherwise try to resolve latest compatible
