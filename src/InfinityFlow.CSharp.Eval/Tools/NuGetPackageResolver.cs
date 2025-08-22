@@ -6,28 +6,38 @@ using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
-using NuGet.Packaging.Signing;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
-using NuGet.Resolver;
 using NuGet.Versioning;
 
 namespace InfinityFlow.CSharp.Eval.Tools;
 
-internal class NuGetPackageResolver
+internal partial class NuGetPackageResolver
 {
     private static readonly string PackagesDirectory = Path.Combine(Path.GetTempPath(), "csharp-mcp-packages");
-    private static readonly Regex NuGetDirectiveRegex = new(@"#r\s+""nuget:\s*([^,]+),\s*([^""]+)""", RegexOptions.Compiled);
-    private static readonly Regex AnyNuGetDirectiveRegex = new(@"#r\s+""nuget:[^""]*""", RegexOptions.Compiled);
+    [GeneratedRegex(@"#r\s+""nuget:\s*([^,]+),\s*([^""]+)""", RegexOptions.IgnoreCase)]
+    private static partial Regex NuGetDirectiveRegex();
+    [GeneratedRegex(@"#r\s+""nuget:[^""]*""", RegexOptions.IgnoreCase)]
+    private static partial Regex AnyNuGetDirectiveRegex();
 
     private const int MaxRecursionDepth = 10;
     private const string TargetFramework = "net9.0";
     private const string MicrosoftExtensionsStableVersion = "8.0.0";
-    private static readonly TimeSpan NetworkOperationTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan NetworkOperationTimeout = GetNetworkTimeout();
 
     static NuGetPackageResolver()
     {
         Directory.CreateDirectory(PackagesDirectory);
+    }
+
+    private static TimeSpan GetNetworkTimeout()
+    {
+        // Allow test environments to override timeout for testing timeout scenarios
+        if (Environment.GetEnvironmentVariable("NUGET_TIMEOUT_TEST") == "true")
+        {
+            return TimeSpan.FromMilliseconds(1); // Very short timeout for testing
+        }
+        return TimeSpan.FromSeconds(30); // Default production timeout
     }
 
     public static async Task<(List<MetadataReference> References, List<string> Errors)> ResolvePackagesAsync(string scriptCode, CancellationToken cancellationToken = default)
@@ -38,10 +48,10 @@ internal class NuGetPackageResolver
         // Note: ResolvedPackages is now a persistent cache for the session
 
         // First, find all #r "nuget:..." directives
-        var allNuGetDirectives = AnyNuGetDirectiveRegex.Matches(scriptCode);
+        var allNuGetDirectives = AnyNuGetDirectiveRegex().Matches(scriptCode);
 
         // Then find properly formatted ones
-        var validMatches = NuGetDirectiveRegex.Matches(scriptCode);
+        var validMatches = NuGetDirectiveRegex().Matches(scriptCode);
 
         // Check for malformed directives
         foreach (Match directive in allNuGetDirectives)
@@ -71,7 +81,7 @@ internal class NuGetPackageResolver
             var cache = new SourceCacheContext();
             var settings = Settings.LoadDefaultSettings(null);
             var repository = Repository.Factory.GetCoreV3("https://api.nuget.org/v3/index.json");
-            
+
             // Apply timeout to cancellation token for network operations
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(NetworkOperationTimeout);

@@ -4,16 +4,17 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- MCP and Core Dependencies -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="4.14.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageVersion>
     <PackageVersion Include="ModelContextProtocol" Version="0.3.0-preview.2" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0-preview.7.25380.108" />
-    
     <!-- Roslyn Scripting -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.14.0" />
-    
     <!-- NuGet Client Libraries -->
     <PackageVersion Include="NuGet.Protocol" Version="6.12.1" />
     <PackageVersion Include="NuGet.Resolver" Version="6.12.1" />
-    
     <!-- Testing -->
     <PackageVersion Include="NUnit" Version="4.4.0" />
     <PackageVersion Include="NUnit.Analyzers" Version="4.10.0" />
