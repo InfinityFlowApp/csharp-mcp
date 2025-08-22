@@ -9,19 +9,19 @@ An MCP (Model Context Protocol) server that evaluates and executes C# scripts us
 - 📚 NuGet package support via `#r "nuget: PackageName, Version"` directives
 - 🔒 Console output capture (safe for MCP stdio protocol)
 - ⚡ Comprehensive error handling for compilation and runtime errors
-- 🐳 Available as both Docker container and dotnet tool with volume mounting support
+- 🐳 Available as both Docker container and dnx package with volume mounting support
 - ✅ Full test coverage with NUnit and FluentAssertions
 
 ## Installation
 
-### As a dotnet tool
+### Using dnx
 
 ```bash
-# Install globally
-dotnet tool install -g InfinityFlow.CSharp.Eval
+# Install via dnx
+dnx InfinityFlow.CSharp.Eval --version 1.0.0 --yes
 
 # Run the tool
-infinityflow-csharp-eval
+dnx run InfinityFlow.CSharp.Eval
 ```
 
 ### Using Docker
@@ -171,13 +171,14 @@ Add to your Cursor settings (`.cursor/mcp_settings.json` or via Settings UI):
 }
 ```
 
-Or if installed as a dotnet tool:
+Or if installed via dnx:
 
 ```json
 {
   "mcpServers": {
     "csharp-eval": {
-      "command": "infinityflow-csharp-eval",
+      "command": "dnx",
+      "args": ["run", "InfinityFlow.CSharp.Eval"],
       "env": {
         "CSX_ALLOWED_PATH": "${workspaceFolder}/scripts"
       }
@@ -212,13 +213,14 @@ Add to your Claude Code configuration (`claude_desktop_config.json`):
 
 Note: The volume mounting (`-v ${HOME}:${HOME}`) allows the tool to access .csx files from your filesystem.
 
-Or if installed as a dotnet tool:
+Or if installed via dnx:
 
 ```json
 {
   "mcpServers": {
     "csharp-eval": {
-      "command": "infinityflow-csharp-eval",
+      "command": "dnx",
+      "args": ["run", "InfinityFlow.CSharp.Eval"],
       "env": {
         "CSX_ALLOWED_PATH": "/Users/your-username/scripts"
       }
@@ -236,7 +238,8 @@ Create `.vscode/mcp.json`:
   "servers": {
     "csharp-eval": {
       "type": "stdio",
-      "command": "infinityflow-csharp-eval"
+      "command": "dnx",
+      "args": ["run", "InfinityFlow.CSharp.Eval"]
     }
   }
 }
@@ -282,7 +285,7 @@ dotnet build
 # Run tests
 dotnet test
 
-# Pack as dotnet tool
+# Pack as MCP package
 dotnet pack -c Release
 ```
 
