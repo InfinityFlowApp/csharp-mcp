@@ -32,9 +32,6 @@ docker pull ghcr.io/infinityflowapp/csharp-mcp:latest
 
 # Run interactively
 docker run -it ghcr.io/infinityflowapp/csharp-mcp:latest
-
-# Or use docker-compose
-docker-compose run csharp-eval-mcp
 ```
 
 ### From source
@@ -331,7 +328,6 @@ csharp-mcp/
 │   └── nunit-testing/               # Programmatic test execution
 ├── Directory.Packages.props          # Central package management
 ├── Dockerfile                        # Docker containerization
-├── docker-compose.yml               # Docker compose configuration
 └── .github/
     └── workflows/                   # GitHub Actions CI/CD
         ├── ci-cd.yml               # Main CI/CD pipeline
