@@ -119,6 +119,7 @@ internal partial class NuGetPackageResolver
     }
 
     private static readonly ConcurrentDictionary<string, bool> ResolvedPackages = new();
+    private static readonly ConcurrentDictionary<string, IEnumerable<PackageDependency>> PackageDependencies = new();
 
     private static async Task<List<string>> DownloadPackageAsync(
         string packageId,
@@ -146,10 +147,12 @@ internal partial class NuGetPackageResolver
         if (Directory.Exists(libPath))
         {
             ResolvedPackages.TryAdd(packageKey, true);
-            return await ResolveTransitiveDependenciesAsync(packagePath, packageId, version, repository, cache, logger, cancellationToken);
+            // For cached packages, we need to read dependencies from the package file
+            var cachedDependencies = await GetCachedPackageDependencies(packagePath, packageId, version, repository, cache, logger, cancellationToken);
+            return await ResolveTransitiveDependenciesAsync(packagePath, packageId, version, cachedDependencies, repository, cache, logger, cancellationToken);
         }
 
-        // Download package
+        // Download package and extract both assemblies and dependencies in one pass
         using var packageStream = new MemoryStream();
         var downloaded = await resource.CopyNupkgToStreamAsync(
             packageId,
@@ -164,7 +167,7 @@ internal partial class NuGetPackageResolver
             throw new InvalidOperationException($"Package '{packageId}' version '{version}' not found");
         }
 
-        // Extract package
+        // Extract package and read dependencies in single operation
         packageStream.Seek(0, SeekOrigin.Begin);
         using var reader = new PackageArchiveReader(packageStream);
 
@@ -203,14 +206,23 @@ internal partial class NuGetPackageResolver
             }
         }
 
+        // Read dependencies from the same package reader (avoid re-downloading)
+        var dependencies = reader.GetPackageDependencies()
+            .Where(x => DefaultCompatibilityProvider.Instance.IsCompatible(framework, x.TargetFramework))
+            .SelectMany(x => x.Packages)
+            .ToList();
+
+        // Cache dependencies for future use
+        PackageDependencies.TryAdd(packageKey, dependencies);
         ResolvedPackages.TryAdd(packageKey, true);
-        return await ResolveTransitiveDependenciesAsync(packagePath, packageId, version, repository, cache, logger, cancellationToken, depth);
+        return await ResolveTransitiveDependenciesAsync(packagePath, packageId, version, dependencies, repository, cache, logger, cancellationToken, depth);
     }
 
     private static async Task<List<string>> ResolveTransitiveDependenciesAsync(
         string packagePath,
         string packageId,
         NuGetVersion version,
+        IEnumerable<PackageDependency> dependencies,
         SourceRepository repository,
         SourceCacheContext cache,
         ILogger logger,
@@ -225,60 +237,41 @@ internal partial class NuGetPackageResolver
         }
 
         var assemblies = GetAssembliesFromPackage(packagePath);
+        var unresolvedDependencies = new List<string>();
 
-        // Get package dependencies for transitive resolution
-        try
+        // Resolve dependencies with improved error tracking
+        foreach (var dependency in dependencies)
         {
-            using var packageStream = new MemoryStream();
-            var resource = await repository.GetResourceAsync<FindPackageByIdResource>(cancellationToken);
-            var downloaded = await resource.CopyNupkgToStreamAsync(
-                packageId,
-                version,
-                packageStream,
-                cache,
-                logger,
-                cancellationToken);
-
-            if (downloaded)
+            if (ShouldResolveDependency(dependency.Id))
             {
-                packageStream.Seek(0, SeekOrigin.Begin);
-                using var reader = new PackageArchiveReader(packageStream);
-
-                var framework = NuGetFramework.Parse(TargetFramework);
-                var dependencies = reader.GetPackageDependencies()
-                    .Where(x => DefaultCompatibilityProvider.Instance.IsCompatible(framework, x.TargetFramework))
-                    .SelectMany(x => x.Packages)
-                    .ToList();
-
-                // Resolve dependencies with better filtering
-                foreach (var dependency in dependencies)
+                try
                 {
-                    if (ShouldResolveDependency(dependency.Id))
+                    var depVersion = GetBestVersionForDependency(dependency);
+                    var depAssemblies = await DownloadPackageAsync(dependency.Id, depVersion, repository, cache, logger, cancellationToken, depth + 1);
+                    assemblies.AddRange(depAssemblies);
+                }
+                catch (Exception ex)
+                {
+                    // Classify errors to determine if they should be ignored or logged
+                    if (IsExpectedDependencyFailure(ex, dependency.Id))
                     {
-                        try
-                        {
-                            var depVersion = GetBestVersionForDependency(dependency);
-                            var depAssemblies = await DownloadPackageAsync(dependency.Id, depVersion, repository, cache, logger, cancellationToken, depth + 1);
-                            assemblies.AddRange(depAssemblies);
-                        }
-                        catch (Exception ex)
-                        {
-                            // Skip dependencies that can't be resolved (likely built into .NET runtime)
-                            if (ex.Message.Contains("not found") || ex.Message.Contains("No compatible framework"))
-                            {
-                                // Silently skip built-in .NET packages
-                                continue;
-                            }
-                            // Log other dependency resolution failures but continue
-                            logger.LogWarning($"Failed to resolve dependency '{dependency.Id}': {ex.Message}");
-                        }
+                        // These are expected failures for built-in .NET packages - log at debug level
+                        logger.LogDebug($"Skipping built-in dependency '{dependency.Id}': {ex.Message}");
+                    }
+                    else
+                    {
+                        // Unexpected failures should be tracked and logged as warnings
+                        unresolvedDependencies.Add($"{dependency.Id}: {ex.Message}");
+                        logger.LogWarning($"Failed to resolve dependency '{dependency.Id}' for package '{packageId}': {ex.Message}");
                     }
                 }
             }
         }
-        catch (Exception ex)
+
+        // Log summary of unresolved dependencies if any
+        if (unresolvedDependencies.Count > 0)
         {
-            logger.LogWarning($"Failed to resolve transitive dependencies for '{packageId}': {ex.Message}");
+            logger.LogInformation($"Package '{packageId}' has {unresolvedDependencies.Count} unresolved dependencies (may impact functionality): {string.Join(", ", unresolvedDependencies.Take(3))}{(unresolvedDependencies.Count > 3 ? "..." : "")}");
         }
 
         // Remove duplicates and prefer newer versions
@@ -414,5 +407,99 @@ internal partial class NuGetPackageResolver
         }
 
         return assemblies;
+    }
+
+    private static async Task<IEnumerable<PackageDependency>> GetCachedPackageDependencies(
+        string packagePath,
+        string packageId,
+        NuGetVersion version,
+        SourceRepository repository,
+        SourceCacheContext cache,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var packageKey = $"{packageId}.{version}";
+        
+        // First check if dependencies are already cached
+        if (PackageDependencies.TryGetValue(packageKey, out var cachedDependencies))
+        {
+            return cachedDependencies;
+        }
+
+        try
+        {
+            // Only download if dependencies not cached yet
+            using var packageStream = new MemoryStream();
+            var resource = await repository.GetResourceAsync<FindPackageByIdResource>(cancellationToken);
+            var downloaded = await resource.CopyNupkgToStreamAsync(
+                packageId,
+                version,
+                packageStream,
+                cache,
+                logger,
+                cancellationToken);
+
+            if (!downloaded)
+            {
+                var emptyDeps = Enumerable.Empty<PackageDependency>();
+                PackageDependencies.TryAdd(packageKey, emptyDeps);
+                return emptyDeps;
+            }
+
+            packageStream.Seek(0, SeekOrigin.Begin);
+            using var reader = new PackageArchiveReader(packageStream);
+            var framework = NuGetFramework.Parse(TargetFramework);
+
+            var dependencies = reader.GetPackageDependencies()
+                .Where(x => DefaultCompatibilityProvider.Instance.IsCompatible(framework, x.TargetFramework))
+                .SelectMany(x => x.Packages)
+                .ToList();
+
+            // Cache for future use
+            PackageDependencies.TryAdd(packageKey, dependencies);
+            return dependencies;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning($"Failed to read dependencies for cached package '{packageId}': {ex.Message}");
+            var emptyDeps = Enumerable.Empty<PackageDependency>();
+            PackageDependencies.TryAdd(packageKey, emptyDeps);
+            return emptyDeps;
+        }
+    }
+
+    private static bool IsExpectedDependencyFailure(Exception ex, string dependencyId)
+    {
+        // These are expected failures for packages that are built into .NET runtime
+        var expectedFailureMessages = new[]
+        {
+            "not found",
+            "No compatible framework",
+            "Package does not exist",
+            "404 (Not Found)"
+        };
+
+        var isExpectedMessage = expectedFailureMessages.Any(msg => 
+            ex.Message.Contains(msg, StringComparison.OrdinalIgnoreCase));
+
+        // Also check if it's a known built-in package that commonly fails
+        var builtInPrefixes = new[]
+        {
+            "System.Runtime",
+            "System.Collections",
+            "System.Linq",
+            "System.Threading.Tasks",
+            "System.IO",
+            "System.Text.Encoding",
+            "System.Globalization",
+            "System.Resources.ResourceManager",
+            "Microsoft.NETCore",
+            "Microsoft.CSharp"
+        };
+
+        var isBuiltInPackage = builtInPrefixes.Any(prefix => 
+            dependencyId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+        return isExpectedMessage && isBuiltInPackage;
     }
 }
