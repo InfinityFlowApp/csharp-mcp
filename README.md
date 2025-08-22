@@ -32,9 +32,6 @@ docker pull ghcr.io/infinityflowapp/csharp-mcp:latest
 
 # Run interactively
 docker run -it ghcr.io/infinityflowapp/csharp-mcp:latest
-
-# Or use docker-compose
-docker-compose run csharp-eval-mcp
 ```
 
 ### From source
@@ -64,6 +61,7 @@ Either `csxFile` or `csx` must be provided, but not both.
 ### Examples
 
 For comprehensive examples, see the [examples directory](examples/):
+
 - [Basic Execution](examples/basic-execution/) - Simple C# script execution
 - [Fibonacci Sequence](examples/fibonacci-sequence/) - Generating number sequences
 - [Data Processing](examples/data-processing/) - LINQ and data manipulation
@@ -146,6 +144,7 @@ Console.WriteLine("5 days".Humanize());
 ```
 
 The tool will automatically:
+
 - Download the specified packages from NuGet.org
 - Resolve and download dependencies
 - Cache packages for faster subsequent runs
@@ -189,45 +188,35 @@ Or if installed via dnx:
 
 ### Claude Code
 
-Add to your Claude Code configuration (`claude_desktop_config.json`):
+Add the MCP server using the CLI:
 
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux**: `~/.config/claude/claude_desktop_config.json`
+**Using Docker:**
 
-```json
-{
-  "mcpServers": {
-    "csharp-eval": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm", "--pull=always",
-        "-v", "${HOME}:${HOME}",
-        "-w", "${PWD}",
-        "ghcr.io/infinityflowapp/csharp-mcp:latest"
-      ]
-    }
-  }
-}
+*Basic setup:*
+
+```bash
+claude mcp add csharp-eval docker -- run -i --rm ghcr.io/infinityflowapp/csharp-mcp:latest
 ```
 
-Note: The volume mounting (`-v ${HOME}:${HOME}`) allows the tool to access .csx files from your filesystem.
+*With file system access:*
 
-Or if installed via dnx:
-
-```json
-{
-  "mcpServers": {
-    "csharp-eval": {
-      "command": "dnx",
-      "args": ["run", "InfinityFlow.CSharp.Eval"],
-      "env": {
-        "CSX_ALLOWED_PATH": "/Users/your-username/scripts"
-      }
-    }
-  }
-}
+```bash
+claude mcp add csharp-eval docker -- run -i --rm --pull=always -v "${HOME}:${HOME}" -w "${PWD}" ghcr.io/infinityflowapp/csharp-mcp:latest
 ```
+
+*With restricted script directory:*
+
+```bash
+claude mcp add csharp-eval -e CSX_ALLOWED_PATH="/scripts" docker -- run -i --rm -v "${HOME}/scripts:/scripts:ro" ghcr.io/infinityflowapp/csharp-mcp:latest
+```
+
+**Using dnx:**
+
+```bash
+claude mcp add csharp-eval -e CSX_ALLOWED_PATH="/Users/your-username/scripts" dnx -- run InfinityFlow.CSharp.Eval
+```
+
+The volume mounting (`-v ${HOME}:${HOME}`) allows the tool to access .csx files from your filesystem.
 
 ### VS Code
 
@@ -331,7 +320,6 @@ csharp-mcp/
 │   └── nunit-testing/               # Programmatic test execution
 ├── Directory.Packages.props          # Central package management
 ├── Dockerfile                        # Docker containerization
-├── docker-compose.yml               # Docker compose configuration
 └── .github/
     └── workflows/                   # GitHub Actions CI/CD
         ├── ci-cd.yml               # Main CI/CD pipeline
@@ -387,6 +375,7 @@ export CSX_ALLOWED_PATH=/path/one:/path/two:/path/three
 ```
 
 **Important Notes:**
+
 - Path restrictions are **disabled inside Docker containers** (when `DOTNET_RUNNING_IN_CONTAINER=true`)
 - This is because Docker already provides isolation via volume mounts
 - If not set, file access is unrestricted (use with caution)
