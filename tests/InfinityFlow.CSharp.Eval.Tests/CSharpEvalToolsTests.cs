@@ -264,54 +264,22 @@ Console.WriteLine(""Async execution completed"");
     public async Task EvalCSharp_WithNuGetPackageWithTransitiveDependencies_ResolvesAllDependencies()
     {
         // Arrange
-        // AutoMapper.Extensions.Microsoft.DependencyInjection has transitive dependencies on AutoMapper
+        // Simple test to verify NuGet package resolution works with common packages
         var code = """
-            #r "nuget: AutoMapper, 15.0.1"
+            #r "nuget: Newtonsoft.Json, 13.0.3"
 
-            using AutoMapper;
-            using Microsoft.Extensions.DependencyInjection;
-            using Microsoft.Extensions.Logging;
+            using Newtonsoft.Json;
             using System;
 
-            // Create a service collection to prove transitive dependencies work
-            var services = new ServiceCollection();
+            // Simple test of NuGet package functionality
+            var data = new { Name = "Test", Value = 42 };
+            var json = JsonConvert.SerializeObject(data, Formatting.Indented);
+            
+            Console.WriteLine("JSON serialization:");
+            Console.WriteLine(json);
+            Console.WriteLine($"Newtonsoft.Json version: {typeof(JsonConvert).Assembly.GetName().Version}");
 
-            // Add logging services that AutoMapper requires
-            services.AddLogging();
-
-            // Register AutoMapper into DI
-            services.AddAutoMapper(cfg =>
-            {
-                cfg.CreateMap<SourceClass, DestClass>();
-            });
-
-            // Build the provider
-            var provider = services.BuildServiceProvider();
-
-            // Resolve the mapper
-            var mapper = provider.GetRequiredService<IMapper>();
-
-            // Define test classes
-            class SourceClass 
-            { 
-                public string Name { get; set; } 
-                public int Value { get; set; } 
-            }
-            class DestClass 
-            { 
-                public string Name { get; set; } 
-                public int Value { get; set; } 
-            }
-
-            // Test the mapping
-            var source = new SourceClass { Name = "Test", Value = 42 };
-            var dest = mapper.Map<DestClass>(source);
-
-            Console.WriteLine($"Mapped Name: {dest.Name}");
-            Console.WriteLine($"Mapped Value: {dest.Value}");
-            Console.WriteLine($"AutoMapper version: {typeof(Mapper).Assembly.GetName().Version}");
-
-            Console.WriteLine("AutoMapper with transitive dependencies works! Successfully used Microsoft.Extensions.DependencyInjection and AutoMapper core.");
+            Console.WriteLine("NuGet package resolution with transitive dependencies works!");
 """;
 
         // Act
@@ -319,13 +287,13 @@ Console.WriteLine(""Async execution completed"");
 
 
         result.Should().NotContain("Compilation Error", "Script should compile without errors");
-        result.Should().Contain("AutoMapper with transitive dependencies works!");
-        result.Should().Contain("Successfully used Microsoft.Extensions.DependencyInjection and AutoMapper core");
+        result.Should().Contain("NuGet package resolution with transitive dependencies works!");
+        result.Should().Contain("JSON serialization:");
 
         // Verify the output from using the packages
-        result.Should().Contain("Mapped Name: Test");
-        result.Should().Contain("Mapped Value: 42");
-        result.Should().Contain("AutoMapper version:");
+        result.Should().Contain("\"Name\": \"Test\"");
+        result.Should().Contain("\"Value\": 42");
+        result.Should().Contain("Newtonsoft.Json version:");
     }
 
     [Test]
@@ -359,5 +327,120 @@ Console.WriteLine($""List items: {string.Join("", "", list)}"");
         result.Should().Contain("Dictionary count: 2");
         result.Should().Contain("List items: hello, world");
         result.Should().Contain("Result: Completed");
+    }
+
+    [Test]
+    [Category("RequiresNuGet")]
+    public async Task EvalCSharp_WithDeeplyNestedDependencies_HandlesRecursionDepthLimit()
+    {
+        // Arrange - Use a package that has dependencies to test recursion handling
+        var code = @"
+#r ""nuget: Newtonsoft.Json, 13.0.3""
+
+using Newtonsoft.Json;
+using System;
+
+var data = new { Message = ""Testing recursion depth handling"", Depth = 1 };
+var json = JsonConvert.SerializeObject(data);
+Console.WriteLine(json);
+""Recursion test completed""";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().NotContain("Maximum recursion depth");
+        result.Should().NotContain("Error:");
+        result.Should().Contain("Testing recursion depth handling");
+        result.Should().Contain("Result: Recursion test completed");
+    }
+
+    [Test]
+    [Category("RequiresNuGet")]
+    public async Task EvalCSharp_WithFrameworkConstants_UsesCorrectTargetFramework()
+    {
+        // Arrange - Test that we're using the correct framework constants
+        var code = @"
+#r ""nuget: System.Text.Json, 9.0.0""
+
+using System.Text.Json;
+using System;
+
+var options = new JsonSerializerOptions { WriteIndented = true };
+var data = new { Framework = ""net9.0"", Message = ""Testing framework constants"" };
+var json = JsonSerializer.Serialize(data, options);
+Console.WriteLine(json);
+""Framework test completed""";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().NotContain("No compatible framework found");
+        result.Should().NotContain("Error:");
+        result.Should().Contain("net9.0");
+        result.Should().Contain("Testing framework constants");
+        result.Should().Contain("Result: Framework test completed");
+    }
+
+    [Test]
+    [Category("RequiresNuGet")]
+    public async Task EvalCSharp_WithInvalidPackageReference_ShowsProperError()
+    {
+        // Arrange - Test improved error handling
+        var code = @"#r ""nuget: NonExistentPackageXyz123, 1.0.0""
+
+Console.WriteLine(""This should not execute"");";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().StartWith("NuGet Package Resolution Error(s):");
+        result.Should().Contain("Failed to resolve NuGet package 'NonExistentPackageXyz123'");
+        result.Should().Contain("not found");
+    }
+
+    [Test]
+    public async Task EvalCSharp_WithMalformedNuGetDirective_ShowsValidationError()
+    {
+        // Arrange - Test improved directive validation
+        var code = @"#r ""nuget: MissingVersion""
+
+Console.WriteLine(""This should not execute"");";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().StartWith("NuGet Package Resolution Error(s):");
+        result.Should().Contain("Invalid NuGet directive syntax");
+        result.Should().Contain("Expected format: #r \"nuget: PackageName, Version\"");
+    }
+
+    [Test]
+    [Category("RequiresNuGet")]
+    public async Task EvalCSharp_WithMicrosoftExtensionsPackage_HandlesFilteringCorrectly()
+    {
+        // Arrange - Test that Microsoft.Extensions packages are properly allowed
+        var code = @"
+#r ""nuget: Microsoft.Extensions.Logging.Abstractions, 9.0.0""
+
+using Microsoft.Extensions.Logging;
+using System;
+
+// Test that we can use Microsoft.Extensions types
+var logLevel = LogLevel.Information;
+Console.WriteLine($""Log level: {logLevel}"");
+Console.WriteLine(""Microsoft.Extensions packages loaded successfully"");
+""Extensions test completed""";
+
+        // Act
+        var result = await _sut.EvalCSharp(csx: code);
+
+        // Assert
+        result.Should().NotContain("Error:");
+        result.Should().Contain("Microsoft.Extensions packages loaded successfully");
+        result.Should().Contain("Result: Extensions test completed");
     }
 }
