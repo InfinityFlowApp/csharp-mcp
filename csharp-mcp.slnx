@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/InfinityFlow.CSharp.Eval/InfinityFlow.CSharp.Eval.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/InfinityFlow.CSharp.Eval.Tests/InfinityFlow.CSharp.Eval.Tests.csproj" />
+  </Folder>
+</Solution>
