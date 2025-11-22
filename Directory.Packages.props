@@ -22,5 +22,6 @@
     <PackageVersion Include="FluentAssertions" Version="8.8.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+    <PackageVersion Include="System.Formats.Asn1" Version="6.0.1" />
   </ItemGroup>
 </Project>
