@@ -1,5 +1,5 @@
 # Build stage
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /source
 
 # Copy solution and project files
@@ -23,7 +23,7 @@ RUN dotnet test -c Release --no-build --verbosity normal
 RUN dotnet publish src/InfinityFlow.CSharp.Eval/InfinityFlow.CSharp.Eval.csproj -c Release -o /app/publish --no-restore
 
 # Runtime stage - Use SDK for NuGet package resolution
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS runtime
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS runtime
 WORKDIR /app
 
 # Install required dependencies for Roslyn scripting
