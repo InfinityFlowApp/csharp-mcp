@@ -131,22 +131,30 @@ public class CSharpEvalTools
                 .WithMetadataResolver(ScriptMetadataResolver.Default.WithSearchPaths(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory()))
                 .WithEmitDebugInformation(true);
 
-            // Capture console output
-            var originalOut = Console.Out;
+            // Capture console output using a custom TextWriter
             var outputBuilder = new StringBuilder();
+            object? scriptResult = null;
+
+            // Execute the script with timeout
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+
+            // Capture console output by replacing Console.Out before running the script
+            // Store and restore at the process level to work correctly across all contexts
+            var originalOut = Console.Out;
+            var originalError = Console.Error;
+            using var stringWriter = new StringWriter(outputBuilder);
+            var syncWriter = TextWriter.Synchronized(stringWriter);
 
             try
             {
-                using var stringWriter = new StringWriter(outputBuilder);
-                Console.SetOut(stringWriter);
+                Console.SetOut(syncWriter);
+                Console.SetError(syncWriter);
 
-                // Execute the script with timeout
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
-
-                // Run script in a task so we can properly handle timeout
+                // Run script in a task for timeout support
                 var scriptTask = Task.Run(async () =>
-                    await CSharpScript.EvaluateAsync(cleanedScript, scriptOptions, cancellationToken: cts.Token),
-                    cts.Token);
+                {
+                    return await CSharpScript.EvaluateAsync(cleanedScript, scriptOptions, cancellationToken: cts.Token);
+                }, cts.Token);
 
                 var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds));
                 var completedTask = await Task.WhenAny(scriptTask, timeoutTask);
@@ -157,21 +165,25 @@ public class CSharpEvalTools
                     throw new OperationCanceledException();
                 }
 
-                var result = await scriptTask;
+                scriptResult = await scriptTask;
 
-                // Add the result value if it's not null
-                if (result != null)
-                {
-                    if (outputBuilder.Length > 0)
-                    {
-                        outputBuilder.AppendLine();
-                    }
-                    outputBuilder.AppendLine($"Result: {result}");
-                }
+                // Flush any buffered output
+                await syncWriter.FlushAsync();
             }
             finally
             {
                 Console.SetOut(originalOut);
+                Console.SetError(originalError);
+            }
+
+            // Add the result value if it's not null
+            if (scriptResult != null)
+            {
+                if (outputBuilder.Length > 0)
+                {
+                    outputBuilder.AppendLine();
+                }
+                outputBuilder.AppendLine($"Result: {scriptResult}");
             }
 
             var output = outputBuilder.ToString();
