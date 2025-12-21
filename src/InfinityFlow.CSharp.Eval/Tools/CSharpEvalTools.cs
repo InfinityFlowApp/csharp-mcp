@@ -143,17 +143,16 @@ public class CSharpEvalTools
                 // Execute the script with timeout
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
 
-                // Run script in a task so we can properly handle timeout
-                var scriptTask = Task.Run(async () =>
-                    await CSharpScript.EvaluateAsync(cleanedScript, scriptOptions, cancellationToken: cts.Token),
-                    cts.Token);
+                // Run script directly (not in Task.Run) to preserve Console.Out context
+                // CSharpScript.EvaluateAsync already returns a Task, so we can use WhenAny for timeout
+                var scriptTask = CSharpScript.EvaluateAsync(cleanedScript, scriptOptions, cancellationToken: cts.Token);
+                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds), cts.Token);
 
-                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds));
                 var completedTask = await Task.WhenAny(scriptTask, timeoutTask);
 
                 if (completedTask == timeoutTask)
                 {
-                    cts.Cancel();
+                    await cts.CancelAsync();
                     throw new OperationCanceledException();
                 }
 
